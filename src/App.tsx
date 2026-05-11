@@ -5263,7 +5263,7 @@ const SplitWorkspaceView: Component<{
             : "row",
     );
     const isHorizontalSplit = createMemo(() => flexDirection() === "row");
-    const dividerThickness = 6;
+    const dividerThickness = 2;
     const dividerStyle = createMemo(() =>
         isHorizontalSplit()
             ? {
