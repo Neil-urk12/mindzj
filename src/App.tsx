@@ -5734,8 +5734,8 @@ const PaneFileView: Component<{
                         height: "30px",
                         padding: "0 10px",
                         background: props.active
-                            ? "var(--mz-bg-secondary)"
-                            : "var(--mz-bg-tertiary)",
+                            ? "var(--mz-bg-tertiary)"
+                            : "var(--mz-bg-secondary)",
                         "border-bottom": "1px solid var(--mz-border)",
                         "flex-shrink": "0",
                         color: props.active

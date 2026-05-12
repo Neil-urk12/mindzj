@@ -320,7 +320,7 @@
     border-top: 1px solid var(--mz-border);
 }
 
-.mz-pane-wrap-primary,
+/* .mz-pane-wrap-primary,
 .mz-pane-wrap-secondary,
 .mz-pane-wrap-primary .cm-scroller,
 .mz-pane-wrap-primary .mz-reading-scroll-container,
@@ -329,10 +329,9 @@
 .mz-pane-wrap-secondary .mz-reading-scroll-container,
 .mz-pane-wrap-secondary .mz-file-preview-scroll,
 .mz-sidebar-file-list-scroll {
-    /* scrollbar-width: thin; */
-    /* scrollbar-color: var(--mz-scrollbar-thumb) var(--mz-scrollbar-track); */
-    /* scrollbar-color: #ff6b6b #a4ff6b; */
-}
+    scrollbar-width: thin;
+    scrollbar-color: var(--mz-scrollbar-thumb) var(--mz-scrollbar-track);
+} */
 
 /* Split-pane scrollbar styling. All four selectors below are kept
    explicit so the primary (left) and secondary (right) panes look
@@ -342,17 +341,24 @@
    the width + background keeps the two panes locked to the same 7px
    monochrome bar regardless of which theme token or CM6 style rule
    the browser resolved last. */
+
+.mz-sidebar-file-list-scroll::-webkit-scrollbar {
+    width: 8px !important;
+}
+
 .mz-split-pane .cm-scroller::-webkit-scrollbar,
 .mz-split-pane .mz-reading-scroll-container::-webkit-scrollbar,
 .mz-split-pane .mz-file-preview-scroll::-webkit-scrollbar,
 .mz-pane-wrap-primary .cm-scroller::-webkit-scrollbar,
 .mz-pane-wrap-primary .mz-reading-scroll-container::-webkit-scrollbar,
-.mz-pane-wrap-primary .mz-file-preview-scroll::-webkit-scrollbar,
+.mz-pane-wrap-primary .mz-file-preview-scroll::-webkit-scrollbar {
+    width: 10px !important;
+}
+
 .mz-pane-wrap-secondary .cm-scroller::-webkit-scrollbar,
 .mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar,
-.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar,
-.mz-sidebar-file-list-scroll::-webkit-scrollbar {
-    width: 10px !important;
+.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar {
+    width: 12px !important;
     /* height: 7px !important; */
     /* background: transparent !important; */
 }
@@ -1693,7 +1699,7 @@ html[data-theme-mode="light"]
     display: inline-block;
     width: 38px;
     margin-right: 18px;
-    color: color-mix(in srgb, var(--mz-text-muted) 45%, #ffffff);
+    color: color-mix(in srgb, var(--mz-text-muted) 35%, #cdcdcd);
     text-align: right;
     user-select: none;
     -webkit-user-select: none;
