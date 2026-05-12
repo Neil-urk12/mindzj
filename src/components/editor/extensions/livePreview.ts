@@ -2089,7 +2089,7 @@ const livePreviewTheme = EditorView.baseTheme({
         left: "12px",
         top: "0",
         width: "28px",
-        color: "var(--mz-text-muted)",
+        color: "color-mix(in srgb, var(--mz-text-muted) 45%, #ffffff)",
         textAlign: "right",
         userSelect: "none",
         pointerEvents: "none",

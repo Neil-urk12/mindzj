@@ -8,6 +8,7 @@ import { ContextMenu, type MenuItem } from "../common/ContextMenu";
 import { displayName } from "../../utils/displayName";
 import { fetchBacklinks, updateBacklinksOnFileRename } from "../../utils/linkUpdater";
 import { openFileRouted } from "../../utils/openFileRouted";
+import { isMarkdownPath } from "../../utils/fileTypes";
 import { t } from "../../i18n";
 
 type FolderVisibilityAction = "default" | "collapse" | "expand";
@@ -306,6 +307,7 @@ interface FileTreeProps {
     entries: VaultEntry[];
     onFileClick: (path: string) => void;
     onOpenSplit?: (path: string, direction: FileTreeSplitDirection) => void | Promise<void>;
+    onExportPdf?: (path: string) => void;
     activePath: string | null;
     depth?: number;
     sortMode?: SortMode;
@@ -1004,11 +1006,19 @@ export const FileTree: Component<FileTreeProps> = (props) => {
             action: () => renameEntry(path, isDir),
         });
         items.push({ label: t("context.showInExplorer"), icon: "\uD83D\uDCC2", action: () => showInExplorer(path) });
+        if (!isDir && props.onExportPdf && isMarkdownPath(path)) {
+            items.push({
+                label: t("context.exportPdf"),
+                icon: "PDF",
+                separator: true,
+                action: () => props.onExportPdf?.(path),
+            });
+        }
         if (!isDir && props.onOpenSplit) {
             items.push({
                 label: t("context.splitRight"),
                 icon: ">",
-                separator: true,
+                separator: !props.onExportPdf || !isMarkdownPath(path),
                 action: () => { void props.onOpenSplit?.(path, "right"); },
             });
             items.push({
@@ -1085,6 +1095,7 @@ export const FileTree: Component<FileTreeProps> = (props) => {
                             entry={entry}
                             onFileClick={props.onFileClick}
                             onOpenSplit={props.onOpenSplit}
+                            onExportPdf={props.onExportPdf}
                             onContextMenu={(e) => showContextForFile(e, entry.relative_path, true)}
                             activePath={props.activePath}
                             depth={props.depth ?? 0}
@@ -1112,6 +1123,7 @@ const FolderItem: Component<{
     entry: VaultEntry;
     onFileClick: (p: string) => void;
     onOpenSplit?: (path: string, direction: FileTreeSplitDirection) => void | Promise<void>;
+    onExportPdf?: (path: string) => void;
     onContextMenu: (e: MouseEvent) => void;
     activePath: string | null;
     depth: number;
@@ -1194,6 +1206,7 @@ const FolderItem: Component<{
                     entries={props.entry.children!}
                     onFileClick={props.onFileClick}
                     onOpenSplit={props.onOpenSplit}
+                    onExportPdf={props.onExportPdf}
                     activePath={props.activePath}
                     depth={props.depth + 1}
                     sortMode={props.sortMode}

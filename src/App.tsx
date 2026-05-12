@@ -596,7 +596,8 @@ const App: Component = () => {
         width: 100% !important;
         max-width: none !important;
         margin: 0 !important;
-        padding: 0 !important;
+        padding: 0 0 0 24px !important;
+        box-sizing: border-box !important;
         background: #ffffff !important;
         color: #1f2328 !important;
         border: 0 !important;
@@ -3796,6 +3797,9 @@ const App: Component = () => {
                                                 void handleSidebarFileClick(p);
                                             }}
                                             onOpenSplit={handleOpenSplitInPane}
+                                            onExportPdf={(path: string) => {
+                                                void exportMarkdownPathToPdf(path);
+                                            }}
                                             activePath={
                                                 vaultStore.activeFile()?.path ??
                                                 null

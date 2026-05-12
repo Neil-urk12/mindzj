@@ -329,8 +329,9 @@
 .mz-pane-wrap-secondary .mz-reading-scroll-container,
 .mz-pane-wrap-secondary .mz-file-preview-scroll,
 .mz-sidebar-file-list-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: var(--mz-scrollbar-thumb) var(--mz-scrollbar-track);
+    /* scrollbar-width: thin; */
+    /* scrollbar-color: var(--mz-scrollbar-thumb) var(--mz-scrollbar-track); */
+    /* scrollbar-color: #ff6b6b #a4ff6b; */
 }
 
 /* Split-pane scrollbar styling. All four selectors below are kept
@@ -338,7 +339,7 @@
    identical — previously the primary pane could pick up the webview's
    default chunkier scrollbar because some CSS specificity paths let
    the CodeMirror internal theme override our rule. `!important` on
-   the width + background keeps the two panes locked to the same 8px
+   the width + background keeps the two panes locked to the same 7px
    monochrome bar regardless of which theme token or CM6 style rule
    the browser resolved last. */
 .mz-split-pane .cm-scroller::-webkit-scrollbar,
@@ -351,9 +352,24 @@
 .mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar,
 .mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar,
 .mz-sidebar-file-list-scroll::-webkit-scrollbar {
-    width: 8px !important;
-    height: 8px !important;
-    background: var(--mz-scrollbar-track) !important;
+    width: 10px !important;
+    /* height: 7px !important; */
+    /* background: transparent !important; */
+}
+
+.mz-split-pane .cm-scroller::-webkit-scrollbar-button,
+.mz-split-pane .mz-reading-scroll-container::-webkit-scrollbar-button,
+.mz-split-pane .mz-file-preview-scroll::-webkit-scrollbar-button,
+.mz-pane-wrap-primary .cm-scroller::-webkit-scrollbar-button,
+.mz-pane-wrap-primary .mz-reading-scroll-container::-webkit-scrollbar-button,
+.mz-pane-wrap-primary .mz-file-preview-scroll::-webkit-scrollbar-button,
+.mz-pane-wrap-secondary .cm-scroller::-webkit-scrollbar-button,
+.mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-button,
+.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-button,
+.mz-sidebar-file-list-scroll::-webkit-scrollbar-button {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 .mz-split-pane .cm-scroller::-webkit-scrollbar-track,
@@ -366,7 +382,7 @@
 .mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-track,
 .mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-track,
 .mz-sidebar-file-list-scroll::-webkit-scrollbar-track {
-    background: var(--mz-scrollbar-track) !important;
+    background: transparent !important;
     border: none !important;
     margin: 0 !important;
 }
@@ -381,7 +397,7 @@
 .mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-thumb,
 .mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-thumb,
 .mz-sidebar-file-list-scroll::-webkit-scrollbar-thumb {
-    background-color: var(--mz-scrollbar-thumb) !important;
+    /* background-color: var(--mz-scrollbar-thumb) !important; */
     background-clip: border-box !important;
     border: 0 solid transparent !important;
     border-radius: 0 !important;
@@ -389,12 +405,14 @@
     min-height: 0 !important;
     min-width: 0 !important;
     border-radius: 0px !important;
+    /* background-color: #e6e6e6; */
+    background-color: var(--mz-bg-active) !important;
 }
 
 /* Kill the gap webkit draws between the scrollbar-track and the
    scrollbar-thumb. By default Chromium pads the thumb with a 1–2px
    transparent border (so the rounded thumb appears to float inside
-   the track); we want the thumb to fill the full 8px track width
+   the track); we want the thumb to fill the full 7px track width
    edge-to-edge so the left pane's scrollbar visually butts up
    against the split divider with no visible gutter. The
    `background-clip: border-box` + zero-width transparent border
@@ -410,7 +428,7 @@
 .mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-corner,
 .mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-corner,
 .mz-sidebar-file-list-scroll::-webkit-scrollbar-corner {
-    background: var(--mz-scrollbar-track) !important;
+    background: transparent !important;
 }
 
 .mz-split-pane .cm-scroller::-webkit-scrollbar-thumb:hover,
@@ -426,6 +444,7 @@
 .mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-thumb:hover,
 .mz-sidebar-file-list-scroll::-webkit-scrollbar-thumb:hover {
     background: var(--mz-border-strong) !important;
+    /* background-color: #e9e9e9; */
 }
 
 /* Pane wrapper + inner editor/reading container flush against the
@@ -449,7 +468,7 @@
 
 /* Firefox-style fallback: the `scrollbar-*` properties don't take
    pseudo-element rules, so we set them on the scrollable element
-   itself. Matches the 8px thin thumb on systems where the webkit
+   itself. Matches the 7px thin thumb on systems where the webkit
    rules aren't honored (shouldn't happen in Tauri's WebView2 but
    cheap insurance). */
 
@@ -1674,14 +1693,17 @@ html[data-theme-mode="light"]
     display: inline-block;
     width: 38px;
     margin-right: 18px;
-    color: var(--mz-text-muted);
+    color: color-mix(in srgb, var(--mz-text-muted) 45%, #ffffff);
     text-align: right;
     user-select: none;
     -webkit-user-select: none;
     pointer-events: none;
 }
 
-.mz-reading-view .mz-rv-code-line-numbers code > .line:not([data-line-number])::before {
+.mz-reading-view
+    .mz-rv-code-line-numbers
+    code
+    > .line:not([data-line-number])::before {
     content: counter(mz-rv-code-line);
 }
 

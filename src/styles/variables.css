@@ -197,17 +197,32 @@ body {
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
+  background: transparent;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--mz-scrollbar-track);
+  background: transparent;
+  border: none;
+}
+
+::-webkit-scrollbar-track-piece {
+  background: transparent;
+  border: none;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--mz-scrollbar-thumb);
   border-radius: 0px;
+  border: 0;
+  background-clip: border-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
