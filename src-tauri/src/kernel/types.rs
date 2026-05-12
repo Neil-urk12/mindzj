@@ -202,6 +202,8 @@ pub struct AppSettings {
     #[serde(default = "default_show_markdown_toolbar")]
     pub show_markdown_toolbar: bool,
     pub editor_line_numbers: bool,
+    #[serde(default)]
+    pub markdown_code_block_line_numbers: bool,
     pub editor_word_wrap: bool,
     #[serde(default)]
     pub editor_spell_check: bool,
@@ -342,6 +344,7 @@ impl Default for AppSettings {
             font_family: default_font_family(),
             show_markdown_toolbar: default_show_markdown_toolbar(),
             editor_line_numbers: false,
+            markdown_code_block_line_numbers: false,
             editor_word_wrap: true,
             editor_spell_check: false,
             editor_readable_line_length: true,

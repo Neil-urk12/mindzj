@@ -508,17 +508,30 @@ const App: Component = () => {
         style.textContent = `
 #mz-pdf-export-root {
     --mz-bg-primary: #ffffff;
-    --mz-bg-secondary: #f6f8fa;
-    --mz-bg-tertiary: #f6f8fa;
-    --mz-bg-hover: #f1f4f8;
-    --mz-bg-codeblock: #0d1117;
+    --mz-bg-secondary: #f8fafc;
+    --mz-bg-tertiary: #f3f6f9;
+    --mz-bg-hover: #eef2f6;
+    --mz-bg-codeblock: #f6f8fa;
     --mz-text-primary: #1f2328;
     --mz-text-secondary: #424a53;
     --mz-text-muted: #6e7781;
-    --mz-border: #d0d7de;
-    --mz-border-strong: #8c959f;
+    --mz-border: #d8dee6;
+    --mz-border-strong: #b6c0cc;
     --mz-accent: #0969da;
     --mz-accent-subtle: #ddf4ff;
+    --mz-syntax-code-bg: #f6f8fa;
+    --mz-syntax-keyword: #cf222e;
+    --mz-syntax-string: #0a3069;
+    --mz-syntax-number: #953800;
+    --mz-syntax-comment: #6e7781;
+    --mz-syntax-function: #8250df;
+    --mz-syntax-type: #116329;
+    --mz-syntax-variable: #953800;
+    background: #ffffff !important;
+    color: #1f2328 !important;
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
 }
 
 @media screen {
@@ -537,7 +550,8 @@ const App: Component = () => {
 
 @media print {
     @page {
-        margin: 16mm;
+        size: A4 portrait;
+        margin: 0;
     }
 
     html,
@@ -546,6 +560,16 @@ const App: Component = () => {
         height: auto !important;
         overflow: visible !important;
         background: #ffffff !important;
+        color: #1f2328 !important;
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    * {
+        box-shadow: none !important;
     }
 
     body > *:not(#mz-pdf-export-root) {
@@ -563,6 +587,9 @@ const App: Component = () => {
         padding: 0 !important;
         background: #ffffff !important;
         color: #1f2328 !important;
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
     }
 
     #mz-pdf-export-root .mz-reading-view {
@@ -570,7 +597,11 @@ const App: Component = () => {
         max-width: none !important;
         margin: 0 !important;
         padding: 0 !important;
+        background: #ffffff !important;
         color: #1f2328 !important;
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
     }
 
     #mz-pdf-export-root a {
@@ -589,6 +620,23 @@ const App: Component = () => {
     #mz-pdf-export-root .mz-rv-code,
     #mz-pdf-export-root .mz-rv-callout {
         break-inside: avoid;
+    }
+
+    #mz-pdf-export-root .mz-rv-code {
+        background: #f6f8fa !important;
+        color: #1f2328 !important;
+        border: 1px solid #d8dee6 !important;
+        border-radius: 6px !important;
+    }
+
+    #mz-pdf-export-root .mz-rv-code pre,
+    #mz-pdf-export-root .mz-rv-code pre.shiki {
+        background: transparent !important;
+        color: #1f2328 !important;
+    }
+
+    #mz-pdf-export-root .mz-rv-table th {
+        background: #f3f6f9 !important;
     }
 
     #mz-pdf-export-root .mz-rv-code-copy,
@@ -3736,6 +3784,7 @@ const App: Component = () => {
                                 }}>
                                 <Show when={sidebarTab() === "files"}>
                                     <div
+                                        class="mz-sidebar-file-list-scroll"
                                         style={{
                                             flex: "1",
                                             "min-height": "0",

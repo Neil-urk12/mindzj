@@ -578,7 +578,6 @@ const headingLineDeco: Record<number, Decoration> = {
 };
 
 const boldDeco = Decoration.mark({ class: "mz-lp-bold" });
-const italicDeco = Decoration.mark({ class: "mz-lp-italic" });
 const strikethroughDeco = Decoration.mark({ class: "mz-lp-strikethrough" });
 const highlightDeco = Decoration.mark({ class: "mz-lp-highlight" });
 const inlineCodeDeco = Decoration.mark({ class: "mz-lp-inline-code" });
@@ -674,6 +673,12 @@ function isFenceLine(text: string): boolean {
 
 function isHorizontalRuleLine(text: string): boolean {
     return /^\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$/.test(text);
+}
+
+function horizontalRuleCursorPos(line: { from: number; text: string }): number {
+    const match = line.text.match(/^(\s{0,3})(-{3,}|\*{3,}|_{3,})/);
+    if (!match) return line.from + line.text.length;
+    return line.from + match[1].length + match[2].length;
 }
 
 function lineFromDomTarget(
@@ -815,12 +820,47 @@ const listLineBoundaryClickHandler = EditorView.domEventHandlers({
         return true;
     },
 });
+
+const horizontalRuleClickHandler = EditorView.domEventHandlers({
+    mousedown(event: MouseEvent, view: EditorView) {
+        if (
+            event.button !== 0 ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.altKey
+        ) {
+            return false;
+        }
+
+        const domLine = lineFromDomTarget(view, event.target);
+        if (!domLine || !isHorizontalRuleLine(domLine.line.text)) return false;
+
+        event.preventDefault();
+        view.dispatch({
+            selection: EditorSelection.cursor(
+                horizontalRuleCursorPos(domLine.line),
+            ),
+            scrollIntoView: true,
+        });
+        view.focus();
+        return true;
+    },
+});
 // Code fence + content + table line decorations (: keep the
 // raw source visible AND cursor-navigable; use CSS to make it LOOK like a
 // rendered code block / table).
 const codeFenceOpenDeco = Decoration.line({ class: "mz-lp-code-fence-open" });
 const codeFenceCloseDeco = Decoration.line({ class: "mz-lp-code-fence-close" });
 const codeContentDeco = Decoration.line({ class: "mz-lp-code-content-line" });
+function codeContentLineDeco(lineNumber: number): Decoration {
+    if (!settingsStore.settings().markdown_code_block_line_numbers) {
+        return codeContentDeco;
+    }
+    return Decoration.line({
+        class: "mz-lp-code-content-line",
+        attributes: { "data-code-line-number": String(lineNumber) },
+    });
+}
 const codeKeywordDeco = Decoration.mark({ class: "mz-lp-code-token-keyword" });
 const codeStringDeco = Decoration.mark({ class: "mz-lp-code-token-string" });
 const codeNumberDeco = Decoration.mark({ class: "mz-lp-code-token-number" });
@@ -1587,34 +1627,14 @@ function buildDecorationsImpl(
 
         // --- Inline formatting (only apply when cursor is not on this line) ---
         if (!isCurrentLine) {
-            // Bold: **text** or __text__
+            // Bold: exactly two asterisks only. Triple asterisks stay plain.
             applyInlineFormat(
                 text,
                 line.from,
-                /\*\*(.+?)\*\*/g,
+                /(?<!\*)\*\*(?!\*)(.+?)(?<!\*)\*\*(?!\*)/g,
                 2,
                 2,
                 boldDeco,
-                decorations,
-            );
-            applyInlineFormat(
-                text,
-                line.from,
-                /__(.+?)__/g,
-                2,
-                2,
-                boldDeco,
-                decorations,
-            );
-
-            // Italic: *text* or _text_ (but not ** or __)
-            applyInlineFormat(
-                text,
-                line.from,
-                /(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g,
-                1,
-                1,
-                italicDeco,
                 decorations,
             );
 
@@ -2059,6 +2079,21 @@ const livePreviewTheme = EditorView.baseTheme({
         borderRight: "1px solid var(--mz-border)",
         paddingLeft: "12px",
     },
+    ".cm-line.mz-lp-code-content-line[data-code-line-number]": {
+        position: "relative",
+        paddingLeft: "56px",
+    },
+    ".cm-line.mz-lp-code-content-line[data-code-line-number]::before": {
+        content: "attr(data-code-line-number)",
+        position: "absolute",
+        left: "12px",
+        top: "0",
+        width: "28px",
+        color: "var(--mz-text-muted)",
+        textAlign: "right",
+        userSelect: "none",
+        pointerEvents: "none",
+    },
     ".mz-lp-code-token-keyword": {
         color: "var(--mz-syntax-keyword)",
         fontWeight: "600",
@@ -2283,6 +2318,7 @@ function buildLineDecorations(
 
     let inFence = false;
     let fenceChar = "";
+    let fenceLineNumber = 0;
 
     for (let i = 1; i <= doc.lines; i++) {
         const line = doc.line(i);
@@ -2298,20 +2334,26 @@ function buildLineDecorations(
                 // Opening fence
                 inFence = true;
                 fenceChar = fenceMatch[1][0];
+                fenceLineNumber = 0;
                 decos.push(codeFenceOpenDeco.range(line.from));
             } else if (text.startsWith(fenceChar.repeat(3))) {
                 // Closing fence
                 inFence = false;
                 fenceChar = "";
+                fenceLineNumber = 0;
                 decos.push(codeFenceCloseDeco.range(line.from));
             } else {
                 // Fence-like line inside a different fence type — treat as content
-                decos.push(codeContentDeco.range(line.from));
+                fenceLineNumber += 1;
+                decos.push(
+                    codeContentLineDeco(fenceLineNumber).range(line.from),
+                );
             }
             continue;
         }
         if (inFence) {
-            decos.push(codeContentDeco.range(line.from));
+            fenceLineNumber += 1;
+            decos.push(codeContentLineDeco(fenceLineNumber).range(line.from));
             continue;
         }
 
@@ -2494,6 +2536,7 @@ export function livePreviewExtension(
     return [
         livePreviewTheme,
         listLineBoundaryClickHandler,
+        horizontalRuleClickHandler,
         lineDecorationField,
         createLivePreviewPlugin(vaultRoot, currentFilePath),
     ];

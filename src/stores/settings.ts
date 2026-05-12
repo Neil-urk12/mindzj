@@ -116,6 +116,7 @@ export interface AppSettings {
     font_family: string;
     show_markdown_toolbar: boolean;
     editor_line_numbers: boolean;
+    markdown_code_block_line_numbers: boolean;
     editor_word_wrap: boolean;
     editor_spell_check: boolean;
     editor_readable_line_length: boolean;
@@ -214,6 +215,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     font_family: DEFAULT_FONT_FAMILY,
     show_markdown_toolbar: true,
     editor_line_numbers: false,
+    markdown_code_block_line_numbers: false,
     editor_word_wrap: true,
     editor_spell_check: false,
     editor_readable_line_length: true,

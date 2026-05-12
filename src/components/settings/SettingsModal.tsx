@@ -947,6 +947,16 @@ export const SettingsModal: Component<SettingsModalProps> = (props) => {
                                 onChange={(v) => set("editor_line_numbers", v)}
                             />
                             <SettingToggle
+                                label={t("settings.codeBlockLineNumbers")}
+                                description={t(
+                                    "settings.codeBlockLineNumbersDescription",
+                                )}
+                                value={s().markdown_code_block_line_numbers}
+                                onChange={(v) =>
+                                    set("markdown_code_block_line_numbers", v)
+                                }
+                            />
+                            <SettingToggle
                                 label={t("settings.wordWrap")}
                                 description={t("settings.wordWrapDescription")}
                                 value={s().editor_word_wrap}

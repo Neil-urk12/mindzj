@@ -101,6 +101,16 @@
     color: var(--mz-syntax-italic);
 }
 
+.mz-editor-mode-live-preview .cm-editor .cm-content .cm-strong {
+    font-weight: inherit;
+    color: inherit;
+}
+
+.mz-editor-mode-live-preview .cm-editor .cm-content .cm-emphasis {
+    font-style: normal;
+    color: inherit;
+}
+
 .cm-editor .cm-content .cm-strikethrough {
     text-decoration: line-through;
     color: var(--mz-syntax-strikethrough);
@@ -317,7 +327,8 @@
 .mz-pane-wrap-primary .mz-file-preview-scroll,
 .mz-pane-wrap-secondary .cm-scroller,
 .mz-pane-wrap-secondary .mz-reading-scroll-container,
-.mz-pane-wrap-secondary .mz-file-preview-scroll {
+.mz-pane-wrap-secondary .mz-file-preview-scroll,
+.mz-sidebar-file-list-scroll {
     scrollbar-width: thin;
     scrollbar-color: var(--mz-scrollbar-thumb) var(--mz-scrollbar-track);
 }
@@ -338,7 +349,8 @@
 .mz-pane-wrap-primary .mz-file-preview-scroll::-webkit-scrollbar,
 .mz-pane-wrap-secondary .cm-scroller::-webkit-scrollbar,
 .mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar,
-.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar {
+.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar,
+.mz-sidebar-file-list-scroll::-webkit-scrollbar {
     width: 8px !important;
     height: 8px !important;
     background: var(--mz-scrollbar-track) !important;
@@ -352,7 +364,8 @@
 .mz-pane-wrap-primary .mz-file-preview-scroll::-webkit-scrollbar-track,
 .mz-pane-wrap-secondary .cm-scroller::-webkit-scrollbar-track,
 .mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-track,
-.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-track {
+.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-track,
+.mz-sidebar-file-list-scroll::-webkit-scrollbar-track {
     background: var(--mz-scrollbar-track) !important;
     border: none !important;
     margin: 0 !important;
@@ -366,7 +379,8 @@
 .mz-pane-wrap-primary .mz-file-preview-scroll::-webkit-scrollbar-thumb,
 .mz-pane-wrap-secondary .cm-scroller::-webkit-scrollbar-thumb,
 .mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-thumb,
-.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-thumb {
+.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-thumb,
+.mz-sidebar-file-list-scroll::-webkit-scrollbar-thumb {
     background-color: var(--mz-scrollbar-thumb) !important;
     background-clip: border-box !important;
     border: 0 solid transparent !important;
@@ -394,7 +408,8 @@
 .mz-pane-wrap-primary .mz-file-preview-scroll::-webkit-scrollbar-corner,
 .mz-pane-wrap-secondary .cm-scroller::-webkit-scrollbar-corner,
 .mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-corner,
-.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-corner {
+.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-corner,
+.mz-sidebar-file-list-scroll::-webkit-scrollbar-corner {
     background: var(--mz-scrollbar-track) !important;
 }
 
@@ -408,7 +423,8 @@
 .mz-pane-wrap-secondary .cm-scroller::-webkit-scrollbar-thumb:hover,
 .mz-pane-wrap-secondary
     .mz-reading-scroll-container::-webkit-scrollbar-thumb:hover,
-.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-thumb:hover {
+.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-thumb:hover,
+.mz-sidebar-file-list-scroll::-webkit-scrollbar-thumb:hover {
     background: var(--mz-border-strong) !important;
 }
 
@@ -1641,6 +1657,32 @@ html[data-theme-mode="light"]
 
 .mz-reading-view .mz-rv-code code {
     font-family: var(--mz-font-mono);
+}
+
+.mz-reading-view .mz-rv-code-line-numbers code {
+    counter-reset: mz-rv-code-line;
+}
+
+.mz-reading-view .mz-rv-code-line-numbers .mz-rv-code-line,
+.mz-reading-view .mz-rv-code-line-numbers code > .line {
+    counter-increment: mz-rv-code-line;
+}
+
+.mz-reading-view .mz-rv-code-line-numbers .mz-rv-code-line::before,
+.mz-reading-view .mz-rv-code-line-numbers code > .line::before {
+    content: attr(data-line-number);
+    display: inline-block;
+    width: 38px;
+    margin-right: 18px;
+    color: var(--mz-text-muted);
+    text-align: right;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: none;
+}
+
+.mz-reading-view .mz-rv-code-line-numbers code > .line:not([data-line-number])::before {
+    content: counter(mz-rv-code-line);
 }
 
 .mz-reading-view .mz-rv-code-lang {

@@ -271,10 +271,14 @@ function markdownToHtml(md: string, ctx: RenderContext): string {
                 codeLines.push(lines[i]);
                 i++;
             }
-            const code = escapeHtml(codeLines.join("\n"));
+            const code = renderCodeLinesHtml(codeLines);
             const langAttr = lang ? ` data-lang="${lang}"` : "";
             const langBadge = lang
                 ? `<span class="mz-rv-code-lang">${lang}</span>`
+                : "";
+            const lineNumberClass = settingsStore.settings()
+                .markdown_code_block_line_numbers
+                ? " mz-rv-code-line-numbers"
                 : "";
 
             if (lang === "mermaid") {
@@ -283,7 +287,7 @@ function markdownToHtml(md: string, ctx: RenderContext): string {
                 );
             } else {
                 html.push(
-                    `<div class="mz-rv-code"${langAttr}>${langBadge}<button class="mz-rv-code-copy" onclick="navigator.clipboard.writeText(this.parentElement.querySelector('code').textContent).then(()=>{this.textContent='${escapeAttr(t("common.copyDone"))}';setTimeout(()=>this.textContent='${escapeAttr(t("common.copy"))}',1500)})">${t("common.copy")}</button><pre><code>${code}</code></pre></div>`,
+                    `<div class="mz-rv-code${lineNumberClass}"${langAttr}>${langBadge}<button class="mz-rv-code-copy" onclick="navigator.clipboard.writeText(this.parentElement.querySelector('code').textContent).then(()=>{this.textContent='${escapeAttr(t("common.copyDone"))}';setTimeout(()=>this.textContent='${escapeAttr(t("common.copy"))}',1500)})">${t("common.copy")}</button><pre><code>${code}</code></pre></div>`,
                 );
             }
             continue;
@@ -566,14 +570,10 @@ function renderInline(text: string, ctx: RenderContext): string {
         });
     }
 
-    // Bold: **text** or __text__
-    result = result.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-    result = result.replace(/__(.+?)__/g, "<strong>$1</strong>");
-
-    // Italic: *text* or _text_
+    // Bold: exactly two asterisks only. Triple asterisks remain plain text.
     result = result.replace(
-        /(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g,
-        "<em>$1</em>",
+        /(?<!\*)\*\*(?!\*)(.+?)(?<!\*)\*\*(?!\*)/g,
+        "<strong>$1</strong>",
     );
 
     // Strikethrough: ~~text~~
@@ -714,6 +714,16 @@ function escapeAttr(str: string): string {
     return str.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+function renderCodeLinesHtml(lines: string[]): string {
+    const sourceLines = lines.length > 0 ? lines : [""];
+    return sourceLines
+        .map(
+            (line, index) =>
+                `<span class="mz-rv-code-line" data-line-number="${index + 1}">${escapeHtml(line)}</span>`,
+        )
+        .join("\n");
+}
+
 function resolveImageSrc(
     src: string,
     vaultRoot: string,
@@ -725,6 +735,14 @@ function resolveImageSrc(
 // ---------------------------------------------------------------------------
 // Shiki code highlighting (post-render)
 // ---------------------------------------------------------------------------
+
+function annotateReadingCodeBlockLines(block: HTMLElement): void {
+    if (!settingsStore.settings().markdown_code_block_line_numbers) return;
+    const lines = block.querySelectorAll<HTMLElement>("pre code > .line");
+    lines.forEach((line, index) => {
+        line.setAttribute("data-line-number", String(index + 1));
+    });
+}
 
 async function highlightCodeBlocks(container: HTMLElement): Promise<void> {
     const { createHighlighter } = await import("shiki");
@@ -745,6 +763,9 @@ async function highlightCodeBlocks(container: HTMLElement): Promise<void> {
             themes: ["github-dark", "github-light"],
             langs: [...langs] as any[],
         });
+        const shikiTheme = container.closest("#mz-pdf-export-root")
+            ? "github-light"
+            : "github-dark";
 
         codeBlocks.forEach((block) => {
             const lang = block.dataset.lang!;
@@ -758,7 +779,7 @@ async function highlightCodeBlocks(container: HTMLElement): Promise<void> {
             try {
                 const html = highlighter.codeToHtml(code, {
                     lang,
-                    theme: "github-dark",
+                    theme: shikiTheme,
                 });
                 const wrapper = block.querySelector("pre")!;
                 wrapper.outerHTML = html;
@@ -768,6 +789,7 @@ async function highlightCodeBlocks(container: HTMLElement): Promise<void> {
                     shikiPre.style.cssText =
                         "margin:0; padding:12px 16px; overflow-x:auto; background:transparent !important; font-size:0.88em; line-height:1.5;";
                 }
+                annotateReadingCodeBlockLines(block);
             } catch {
                 // Keep plain text
             }
@@ -1465,7 +1487,13 @@ export const ReadingView: Component<ReadingViewProps> = (props) => {
     });
 
     createEffect(
-        on(resolvedFile, async (activeFile) => {
+        on(
+            () =>
+                [
+                    resolvedFile(),
+                    settingsStore.settings().markdown_code_block_line_numbers,
+                ] as const,
+            async ([activeFile]) => {
             if (!containerRef || !scrollContainerRef || !activeFile) return;
             setReadingSurfaceVisibility(false);
             const previousPath = currentFilePath;
@@ -1771,7 +1799,8 @@ export const ReadingView: Component<ReadingViewProps> = (props) => {
                 if (currentFilePath !== activeFile.path) return;
                 setReadingSurfaceVisibility(true);
             });
-        }),
+            },
+        ),
     );
 
     // Apply zoom

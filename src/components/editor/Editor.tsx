@@ -112,6 +112,56 @@ interface EditorProps {
     onActivate?: () => void;
 }
 
+function isHorizontalRuleLineText(text: string): boolean {
+    return /^\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$/.test(text);
+}
+
+function horizontalRuleCursorPos(line: { from: number; text: string }): number {
+    const match = line.text.match(/^(\s{0,3})(-{3,}|\*{3,}|_{3,})/);
+    if (!match) return line.from + line.text.length;
+    return line.from + match[1].length + match[2].length;
+}
+
+function adjustHorizontalRuleCursor(
+    view: EditorView,
+    preserveAnchor: number | null = null,
+): boolean {
+    const selection = view.state.selection.main;
+    const line = view.state.doc.lineAt(selection.head);
+    if (!isHorizontalRuleLineText(line.text)) return false;
+    const target = horizontalRuleCursorPos(line);
+    if (selection.head === target) return false;
+    view.dispatch({
+        selection:
+            preserveAnchor === null
+                ? EditorSelection.cursor(target)
+                : EditorSelection.range(preserveAnchor, target),
+        scrollIntoView: true,
+    });
+    return true;
+}
+
+function moveLineAndSnapHorizontalRule(
+    view: EditorView,
+    move: (view: EditorView) => boolean,
+): boolean {
+    const ok = move(view);
+    if (!ok) return false;
+    adjustHorizontalRuleCursor(view);
+    return true;
+}
+
+function selectLineAndSnapHorizontalRule(
+    view: EditorView,
+    move: (view: EditorView) => boolean,
+): boolean {
+    const anchor = view.state.selection.main.anchor;
+    const ok = move(view);
+    if (!ok) return false;
+    adjustHorizontalRuleCursor(view, anchor);
+    return true;
+}
+
 // Override the default highlight style for heading tags so they no
 // longer carry an underline (the built-in defaultHighlightStyle sets
 // `textDecoration: "underline"` on `tags.heading`). Keeping bold +
@@ -916,6 +966,33 @@ export const Editor: Component<EditorProps> = (props) => {
         ),
     );
 
+    createEffect(
+        on(
+            () => settingsStore.settings().markdown_code_block_line_numbers,
+            (_showNums, prev) => {
+                if (prev === undefined) return;
+                if (getActiveViewMode() !== "live-preview") return;
+                if (!containerRef || !currentFilePath) return;
+                const activeFile = resolvedFile();
+                if (!activeFile) return;
+                const currentContent = editorView
+                    ? editorView.state.doc.toString()
+                    : activeFile.content;
+                rememberEditorViewport();
+                persistCurrentHistory();
+                createEditorView(currentContent);
+                if (editorView && currentFilePath) {
+                    restoreEditorViewport(
+                        editorView,
+                        currentFilePath,
+                        getActiveViewMode(),
+                        true,
+                    );
+                }
+            },
+        ),
+    );
+
     function createEditorView(content: string) {
         if (!containerRef) return;
         closeContextMenu();
@@ -1102,10 +1179,38 @@ export const Editor: Component<EditorProps> = (props) => {
                               key: "Mod-Shift-End",
                               run: selectLineBoundaryForward,
                           },
-                          { key: "ArrowUp", run: cursorLineUp },
-                          { key: "ArrowDown", run: cursorLineDown },
-                          { key: "Shift-ArrowUp", run: selectLineUp },
-                          { key: "Shift-ArrowDown", run: selectLineDown },
+                          {
+                              key: "ArrowUp",
+                              run: (v: EditorView) =>
+                                  moveLineAndSnapHorizontalRule(
+                                      v,
+                                      cursorLineUp,
+                                  ),
+                          },
+                          {
+                              key: "ArrowDown",
+                              run: (v: EditorView) =>
+                                  moveLineAndSnapHorizontalRule(
+                                      v,
+                                      cursorLineDown,
+                                  ),
+                          },
+                          {
+                              key: "Shift-ArrowUp",
+                              run: (v: EditorView) =>
+                                  selectLineAndSnapHorizontalRule(
+                                      v,
+                                      selectLineUp,
+                                  ),
+                          },
+                          {
+                              key: "Shift-ArrowDown",
+                              run: (v: EditorView) =>
+                                  selectLineAndSnapHorizontalRule(
+                                      v,
+                                      selectLineDown,
+                                  ),
+                          },
                       ]
                     : []),
                 ...defaultKeymap,
@@ -2521,8 +2626,10 @@ export const Editor: Component<EditorProps> = (props) => {
                 const sel = view.state.selection.main;
                 const text = view.state.sliceDoc(sel.from, sel.to);
                 const cleared = text
-                    .replace(/\*\*(.*?)\*\*/g, "$1")
-                    .replace(/\*(.*?)\*/g, "$1")
+                    .replace(
+                        /(?<!\*)\*\*(?!\*)(.*?)(?<!\*)\*\*(?!\*)/g,
+                        "$1",
+                    )
                     .replace(/~~(.*?)~~/g, "$1")
                     .replace(/==(.*?)==/g, "$1")
                     .replace(/`(.*?)`/g, "$1")
@@ -2694,6 +2801,7 @@ export const Editor: Component<EditorProps> = (props) => {
 
     return (
         <div
+            class={`mz-editor-host mz-editor-mode-${getActiveViewMode()}`}
             style={{
                 flex: "1",
                 "min-height": "0",

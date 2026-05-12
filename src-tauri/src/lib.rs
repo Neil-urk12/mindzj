@@ -297,10 +297,14 @@ async fn export_current_webview_to_pdf(
 
         let _ = print_settings.SetOrientation(COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT);
         let _ = print_settings.SetScaleFactor(1.0);
-        let _ = print_settings.SetMarginTop(0.0);
-        let _ = print_settings.SetMarginBottom(0.0);
-        let _ = print_settings.SetMarginLeft(0.0);
-        let _ = print_settings.SetMarginRight(0.0);
+        // A4 portrait in inches. Margins live here rather than CSS
+        // @page so WebView2 does not draw any page-frame artifacts.
+        let _ = print_settings.SetPageWidth(8.27);
+        let _ = print_settings.SetPageHeight(11.69);
+        let _ = print_settings.SetMarginTop(0.55);
+        let _ = print_settings.SetMarginBottom(0.55);
+        let _ = print_settings.SetMarginLeft(0.58);
+        let _ = print_settings.SetMarginRight(0.58);
         let _ = print_settings.SetShouldPrintBackgrounds(true);
         let _ = print_settings.SetShouldPrintHeaderAndFooter(false);
         let _ = print_settings.SetShouldPrintSelectionOnly(false);
