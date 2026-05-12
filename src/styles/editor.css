@@ -31,6 +31,14 @@
     cursor: text;
 }
 
+.mz-reading-view .mz-rv-table,
+.mz-reading-view .mz-rv-table *,
+.mz-reading-view .mz-rv-table th,
+.mz-reading-view .mz-rv-table td {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
 /* Markdown heading styling — inline span rules.
    DO NOT set font-size here. If the inline <span> has a larger font-size
    than the containing .cm-line's line-height, the visible line becomes
@@ -302,6 +310,18 @@
     border-top: 1px solid var(--mz-border);
 }
 
+.mz-pane-wrap-primary,
+.mz-pane-wrap-secondary,
+.mz-pane-wrap-primary .cm-scroller,
+.mz-pane-wrap-primary .mz-reading-scroll-container,
+.mz-pane-wrap-primary .mz-file-preview-scroll,
+.mz-pane-wrap-secondary .cm-scroller,
+.mz-pane-wrap-secondary .mz-reading-scroll-container,
+.mz-pane-wrap-secondary .mz-file-preview-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--mz-scrollbar-thumb) var(--mz-scrollbar-track);
+}
+
 /* Split-pane scrollbar styling. All four selectors below are kept
    explicit so the primary (left) and secondary (right) panes look
    identical — previously the primary pane could pick up the webview's
@@ -312,21 +332,27 @@
    the browser resolved last. */
 .mz-split-pane .cm-scroller::-webkit-scrollbar,
 .mz-split-pane .mz-reading-scroll-container::-webkit-scrollbar,
+.mz-split-pane .mz-file-preview-scroll::-webkit-scrollbar,
 .mz-pane-wrap-primary .cm-scroller::-webkit-scrollbar,
 .mz-pane-wrap-primary .mz-reading-scroll-container::-webkit-scrollbar,
+.mz-pane-wrap-primary .mz-file-preview-scroll::-webkit-scrollbar,
 .mz-pane-wrap-secondary .cm-scroller::-webkit-scrollbar,
-.mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar {
-    width: 10px !important;
+.mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar,
+.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar {
+    width: 8px !important;
     height: 8px !important;
     background: var(--mz-scrollbar-track) !important;
 }
 
 .mz-split-pane .cm-scroller::-webkit-scrollbar-track,
 .mz-split-pane .mz-reading-scroll-container::-webkit-scrollbar-track,
+.mz-split-pane .mz-file-preview-scroll::-webkit-scrollbar-track,
 .mz-pane-wrap-primary .cm-scroller::-webkit-scrollbar-track,
 .mz-pane-wrap-primary .mz-reading-scroll-container::-webkit-scrollbar-track,
+.mz-pane-wrap-primary .mz-file-preview-scroll::-webkit-scrollbar-track,
 .mz-pane-wrap-secondary .cm-scroller::-webkit-scrollbar-track,
-.mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-track {
+.mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-track,
+.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-track {
     background: var(--mz-scrollbar-track) !important;
     border: none !important;
     margin: 0 !important;
@@ -334,10 +360,13 @@
 
 .mz-split-pane .cm-scroller::-webkit-scrollbar-thumb,
 .mz-split-pane .mz-reading-scroll-container::-webkit-scrollbar-thumb,
+.mz-split-pane .mz-file-preview-scroll::-webkit-scrollbar-thumb,
 .mz-pane-wrap-primary .cm-scroller::-webkit-scrollbar-thumb,
 .mz-pane-wrap-primary .mz-reading-scroll-container::-webkit-scrollbar-thumb,
+.mz-pane-wrap-primary .mz-file-preview-scroll::-webkit-scrollbar-thumb,
 .mz-pane-wrap-secondary .cm-scroller::-webkit-scrollbar-thumb,
-.mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-thumb {
+.mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-thumb,
+.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-thumb {
     background-color: var(--mz-scrollbar-thumb) !important;
     background-clip: border-box !important;
     border: 0 solid transparent !important;
@@ -359,21 +388,27 @@
    boundary regardless of the browser's default padding. */
 .mz-split-pane .cm-scroller::-webkit-scrollbar-corner,
 .mz-split-pane .mz-reading-scroll-container::-webkit-scrollbar-corner,
+.mz-split-pane .mz-file-preview-scroll::-webkit-scrollbar-corner,
 .mz-pane-wrap-primary .cm-scroller::-webkit-scrollbar-corner,
 .mz-pane-wrap-primary .mz-reading-scroll-container::-webkit-scrollbar-corner,
+.mz-pane-wrap-primary .mz-file-preview-scroll::-webkit-scrollbar-corner,
 .mz-pane-wrap-secondary .cm-scroller::-webkit-scrollbar-corner,
-.mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-corner {
+.mz-pane-wrap-secondary .mz-reading-scroll-container::-webkit-scrollbar-corner,
+.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-corner {
     background: var(--mz-scrollbar-track) !important;
 }
 
 .mz-split-pane .cm-scroller::-webkit-scrollbar-thumb:hover,
 .mz-split-pane .mz-reading-scroll-container::-webkit-scrollbar-thumb:hover,
+.mz-split-pane .mz-file-preview-scroll::-webkit-scrollbar-thumb:hover,
 .mz-pane-wrap-primary .cm-scroller::-webkit-scrollbar-thumb:hover,
 .mz-pane-wrap-primary
     .mz-reading-scroll-container::-webkit-scrollbar-thumb:hover,
+.mz-pane-wrap-primary .mz-file-preview-scroll::-webkit-scrollbar-thumb:hover,
 .mz-pane-wrap-secondary .cm-scroller::-webkit-scrollbar-thumb:hover,
 .mz-pane-wrap-secondary
-    .mz-reading-scroll-container::-webkit-scrollbar-thumb:hover {
+    .mz-reading-scroll-container::-webkit-scrollbar-thumb:hover,
+.mz-pane-wrap-secondary .mz-file-preview-scroll::-webkit-scrollbar-thumb:hover {
     background: var(--mz-border-strong) !important;
 }
 
@@ -624,6 +659,40 @@ html[data-theme="light"] .cm-editor .cm-panel.mz-search-panel {
    stylesheet — ensures CM6's line-height measurement pipeline picks up
    the font-size changes correctly, which is what keeps click-to-line
    mapping accurate even after the user has scrolled far into the doc. */
+
+.cm-editor .cm-line.mz-lp-table-header-line {
+    background: color-mix(
+        in srgb,
+        var(--mz-bg-tertiary) 76%,
+        transparent
+    ) !important;
+}
+
+.cm-editor .cm-line.mz-lp-table-separator-line {
+    background: color-mix(
+        in srgb,
+        var(--mz-bg-tertiary) 70%,
+        transparent
+    ) !important;
+}
+
+.cm-editor .cm-line.mz-lp-table-row-line {
+    background: color-mix(
+        in srgb,
+        var(--mz-bg-secondary) 74%,
+        transparent
+    ) !important;
+}
+
+.cm-editor .cm-line.mz-lp-table-header-line::selection,
+.cm-editor .cm-line.mz-lp-table-header-line *::selection,
+.cm-editor .cm-line.mz-lp-table-separator-line::selection,
+.cm-editor .cm-line.mz-lp-table-separator-line *::selection,
+.cm-editor .cm-line.mz-lp-table-row-line::selection,
+.cm-editor .cm-line.mz-lp-table-row-line *::selection {
+    background: var(--mz-bg-selection) !important;
+    color: inherit;
+}
 
 /* Inline formatting */
 .cm-editor .mz-lp-bold {

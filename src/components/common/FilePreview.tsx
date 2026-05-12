@@ -150,6 +150,7 @@ export const FilePreview: Component<{
                 }
             >
                 <div
+                    class="mz-file-preview-scroll"
                     style={{
                         flex: "1",
                         display: "flex",

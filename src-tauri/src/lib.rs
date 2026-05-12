@@ -19,6 +19,7 @@ mod kernel;
 mod keyboard_hook;
 
 use api::settings_api::{apply_window_state, load_window_state_sync};
+use kernel::error::CommandError;
 use kernel::AppState;
 use tauri::Manager;
 
@@ -215,6 +216,158 @@ fn minimize_window(window: tauri::WebviewWindow) {
     if let Err(e) = window.minimize() {
         tracing::warn!("minimize_window failed: {}", e);
     }
+}
+
+#[cfg(windows)]
+#[tauri::command]
+async fn export_current_webview_to_pdf(
+    window: tauri::WebviewWindow,
+    output_path: String,
+) -> Result<(), CommandError> {
+    use std::sync::mpsc;
+    use std::time::Duration;
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2Environment6, ICoreWebView2_7, COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT,
+    };
+    use webview2_com::{CoTaskMemPWSTR, PrintToPdfCompletedHandler};
+    use windows_core::Interface;
+
+    if output_path.trim().is_empty() {
+        return Err(CommandError {
+            code: "INVALID_OUTPUT_PATH".into(),
+            message: "PDF output path is empty".into(),
+        });
+    }
+
+    match std::fs::remove_file(&output_path) {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(CommandError {
+                code: "PDF_EXPORT_IO_ERROR".into(),
+                message: format!("Failed to replace existing PDF: {}", e),
+            });
+        }
+    }
+
+    let (tx, rx) = mpsc::channel::<Result<(), String>>();
+    let label = window.label().to_string();
+    let schedule_result = window.with_webview(move |webview| unsafe {
+        let setup_tx = tx.clone();
+
+        let controller = webview.controller();
+        let core_webview = match controller.CoreWebView2() {
+            Ok(value) => value,
+            Err(e) => {
+                let _ = setup_tx.send(Err(format!("CoreWebView2() failed: {:?}", e)));
+                return;
+            }
+        };
+
+        let printable = match core_webview.cast::<ICoreWebView2_7>() {
+            Ok(value) => value,
+            Err(e) => {
+                let _ = setup_tx.send(Err(format!(
+                    "WebView2 PrintToPdf is unavailable: {:?}",
+                    e
+                )));
+                return;
+            }
+        };
+
+        let environment = webview.environment();
+        let environment6 = match environment.cast::<ICoreWebView2Environment6>() {
+            Ok(value) => value,
+            Err(e) => {
+                let _ = setup_tx.send(Err(format!(
+                    "WebView2 print settings are unavailable: {:?}",
+                    e
+                )));
+                return;
+            }
+        };
+
+        let print_settings = match environment6.CreatePrintSettings() {
+            Ok(value) => value,
+            Err(e) => {
+                let _ = setup_tx.send(Err(format!("CreatePrintSettings failed: {:?}", e)));
+                return;
+            }
+        };
+
+        let _ = print_settings.SetOrientation(COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT);
+        let _ = print_settings.SetScaleFactor(1.0);
+        let _ = print_settings.SetMarginTop(0.0);
+        let _ = print_settings.SetMarginBottom(0.0);
+        let _ = print_settings.SetMarginLeft(0.0);
+        let _ = print_settings.SetMarginRight(0.0);
+        let _ = print_settings.SetShouldPrintBackgrounds(true);
+        let _ = print_settings.SetShouldPrintHeaderAndFooter(false);
+        let _ = print_settings.SetShouldPrintSelectionOnly(false);
+
+        let callback_tx = tx.clone();
+        let handler = PrintToPdfCompletedHandler::create(Box::new(move |error, success| {
+            if let Err(e) = error {
+                let _ = callback_tx.send(Err(format!("PrintToPdf failed: {:?}", e)));
+            } else if success {
+                let _ = callback_tx.send(Ok(()));
+            } else {
+                let _ = callback_tx.send(Err("PrintToPdf returned success=false".into()));
+            }
+            Ok(())
+        }));
+
+        let output = CoTaskMemPWSTR::from(output_path.as_str());
+        if let Err(e) = printable.PrintToPdf(*output.as_ref().as_pcwstr(), &print_settings, &handler)
+        {
+            let _ = tx.send(Err(format!("PrintToPdf scheduling failed: {:?}", e)));
+        }
+    });
+
+    if let Err(e) = schedule_result {
+        return Err(CommandError {
+            code: "PDF_EXPORT_WEBVIEW_ERROR".into(),
+            message: format!(
+                "Failed to access WebView2 for window '{}': {:?}",
+                label, e
+            ),
+        });
+    }
+
+    let result = tokio::task::spawn_blocking(move || rx.recv_timeout(Duration::from_secs(120)))
+        .await
+        .map_err(|e| CommandError {
+            code: "PDF_EXPORT_JOIN_ERROR".into(),
+            message: format!("PDF export task failed: {}", e),
+        })?;
+
+    match result {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(message)) => Err(CommandError {
+            code: "PDF_EXPORT_FAILED".into(),
+            message,
+        }),
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(CommandError {
+            code: "PDF_EXPORT_TIMEOUT".into(),
+            message: "PDF export timed out".into(),
+        }),
+        Err(mpsc::RecvTimeoutError::Disconnected) => Err(CommandError {
+            code: "PDF_EXPORT_DISCONNECTED".into(),
+            message: "PDF export callback was disconnected".into(),
+        }),
+    }
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+async fn export_current_webview_to_pdf(
+    _window: tauri::WebviewWindow,
+    _output_path: String,
+) -> Result<(), CommandError> {
+    Err(CommandError {
+        code: "UNSUPPORTED_PLATFORM".into(),
+        message: "PDF export is currently implemented through Windows WebView2".into(),
+    })
 }
 
 /// Multi-window-aware close: if there are OTHER webview windows open,
@@ -711,6 +864,7 @@ pub fn run() {
             close_or_exit,
             open_devtools,
             minimize_window,
+            export_current_webview_to_pdf,
             // Vault API
             api::vault_api::open_vault,
             api::vault_api::get_vault_info,

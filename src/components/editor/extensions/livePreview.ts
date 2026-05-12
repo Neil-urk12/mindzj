@@ -821,6 +821,13 @@ const listLineBoundaryClickHandler = EditorView.domEventHandlers({
 const codeFenceOpenDeco = Decoration.line({ class: "mz-lp-code-fence-open" });
 const codeFenceCloseDeco = Decoration.line({ class: "mz-lp-code-fence-close" });
 const codeContentDeco = Decoration.line({ class: "mz-lp-code-content-line" });
+const codeKeywordDeco = Decoration.mark({ class: "mz-lp-code-token-keyword" });
+const codeStringDeco = Decoration.mark({ class: "mz-lp-code-token-string" });
+const codeNumberDeco = Decoration.mark({ class: "mz-lp-code-token-number" });
+const codeCommentDeco = Decoration.mark({ class: "mz-lp-code-token-comment" });
+const codeFunctionDeco = Decoration.mark({ class: "mz-lp-code-token-function" });
+const codeTypeDeco = Decoration.mark({ class: "mz-lp-code-token-type" });
+const codeVariableDeco = Decoration.mark({ class: "mz-lp-code-token-variable" });
 const tableHeaderDeco = Decoration.line({ class: "mz-lp-table-header-line" });
 const tableSepDeco = Decoration.line({ class: "mz-lp-table-separator-line" });
 const tableRowDeco = Decoration.line({ class: "mz-lp-table-row-line" });
@@ -842,6 +849,580 @@ const taskMarkerDeco = Decoration.mark({ class: "mz-lp-task-marker" });
 // colour and is hard to read — especially for anchor links like
 // `](#section-name)` which hold actual readable content.
 const linkUrlTailDeco = Decoration.mark({ class: "mz-lp-link-url-tail" });
+
+type TokenSpan = { from: number; to: number };
+
+const LANG_ALIASES: Record<string, string> = {
+    py: "python",
+    python3: "python",
+    js: "javascript",
+    jsx: "javascript",
+    mjs: "javascript",
+    cjs: "javascript",
+    ts: "typescript",
+    tsx: "typescript",
+    rs: "rust",
+    sh: "bash",
+    shell: "bash",
+    zsh: "bash",
+    ps1: "powershell",
+    pwsh: "powershell",
+    yml: "yaml",
+    htm: "html",
+    cxx: "cpp",
+    cc: "cpp",
+    hpp: "cpp",
+    cs: "csharp",
+};
+
+const CODE_KEYWORDS: Record<string, string[]> = {
+    python: [
+        "and",
+        "as",
+        "assert",
+        "async",
+        "await",
+        "break",
+        "class",
+        "continue",
+        "def",
+        "del",
+        "elif",
+        "else",
+        "except",
+        "False",
+        "finally",
+        "for",
+        "from",
+        "global",
+        "if",
+        "import",
+        "in",
+        "is",
+        "lambda",
+        "None",
+        "nonlocal",
+        "not",
+        "or",
+        "pass",
+        "raise",
+        "return",
+        "True",
+        "try",
+        "while",
+        "with",
+        "yield",
+    ],
+    javascript: [
+        "async",
+        "await",
+        "break",
+        "case",
+        "catch",
+        "class",
+        "const",
+        "continue",
+        "debugger",
+        "default",
+        "delete",
+        "do",
+        "else",
+        "export",
+        "extends",
+        "false",
+        "finally",
+        "for",
+        "from",
+        "function",
+        "if",
+        "import",
+        "in",
+        "instanceof",
+        "let",
+        "new",
+        "null",
+        "of",
+        "return",
+        "super",
+        "switch",
+        "this",
+        "throw",
+        "true",
+        "try",
+        "typeof",
+        "undefined",
+        "var",
+        "void",
+        "while",
+        "yield",
+    ],
+    typescript: [
+        "abstract",
+        "as",
+        "async",
+        "await",
+        "break",
+        "case",
+        "catch",
+        "class",
+        "const",
+        "continue",
+        "declare",
+        "default",
+        "else",
+        "enum",
+        "export",
+        "extends",
+        "false",
+        "finally",
+        "for",
+        "from",
+        "function",
+        "if",
+        "implements",
+        "import",
+        "interface",
+        "let",
+        "namespace",
+        "new",
+        "null",
+        "of",
+        "private",
+        "protected",
+        "public",
+        "readonly",
+        "return",
+        "static",
+        "super",
+        "switch",
+        "this",
+        "throw",
+        "true",
+        "try",
+        "type",
+        "typeof",
+        "undefined",
+        "var",
+        "while",
+    ],
+    rust: [
+        "as",
+        "async",
+        "await",
+        "break",
+        "const",
+        "continue",
+        "crate",
+        "dyn",
+        "else",
+        "enum",
+        "extern",
+        "false",
+        "fn",
+        "for",
+        "if",
+        "impl",
+        "in",
+        "let",
+        "loop",
+        "match",
+        "mod",
+        "move",
+        "mut",
+        "pub",
+        "ref",
+        "return",
+        "self",
+        "Self",
+        "static",
+        "struct",
+        "super",
+        "trait",
+        "true",
+        "type",
+        "unsafe",
+        "use",
+        "where",
+        "while",
+    ],
+    go: [
+        "break",
+        "case",
+        "chan",
+        "const",
+        "continue",
+        "default",
+        "defer",
+        "else",
+        "fallthrough",
+        "for",
+        "func",
+        "go",
+        "goto",
+        "if",
+        "import",
+        "interface",
+        "map",
+        "package",
+        "range",
+        "return",
+        "select",
+        "struct",
+        "switch",
+        "type",
+        "var",
+    ],
+    java: [
+        "abstract",
+        "boolean",
+        "break",
+        "case",
+        "catch",
+        "class",
+        "const",
+        "continue",
+        "default",
+        "do",
+        "else",
+        "enum",
+        "extends",
+        "false",
+        "final",
+        "finally",
+        "for",
+        "if",
+        "implements",
+        "import",
+        "instanceof",
+        "interface",
+        "new",
+        "null",
+        "package",
+        "private",
+        "protected",
+        "public",
+        "return",
+        "static",
+        "super",
+        "switch",
+        "this",
+        "throw",
+        "throws",
+        "true",
+        "try",
+        "void",
+        "while",
+    ],
+    c: [
+        "auto",
+        "break",
+        "case",
+        "char",
+        "const",
+        "continue",
+        "default",
+        "do",
+        "double",
+        "else",
+        "enum",
+        "extern",
+        "float",
+        "for",
+        "goto",
+        "if",
+        "inline",
+        "int",
+        "long",
+        "register",
+        "return",
+        "short",
+        "signed",
+        "sizeof",
+        "static",
+        "struct",
+        "switch",
+        "typedef",
+        "union",
+        "unsigned",
+        "void",
+        "volatile",
+        "while",
+    ],
+    cpp: [
+        "alignas",
+        "auto",
+        "break",
+        "case",
+        "catch",
+        "class",
+        "const",
+        "constexpr",
+        "continue",
+        "default",
+        "delete",
+        "do",
+        "else",
+        "enum",
+        "explicit",
+        "export",
+        "false",
+        "for",
+        "friend",
+        "if",
+        "inline",
+        "namespace",
+        "new",
+        "nullptr",
+        "operator",
+        "private",
+        "protected",
+        "public",
+        "return",
+        "static",
+        "struct",
+        "switch",
+        "template",
+        "this",
+        "throw",
+        "true",
+        "try",
+        "typedef",
+        "typename",
+        "using",
+        "virtual",
+        "void",
+        "while",
+    ],
+    json: ["false", "null", "true"],
+    bash: [
+        "case",
+        "do",
+        "done",
+        "elif",
+        "else",
+        "esac",
+        "fi",
+        "for",
+        "function",
+        "if",
+        "in",
+        "then",
+        "until",
+        "while",
+    ],
+    powershell: [
+        "begin",
+        "break",
+        "catch",
+        "class",
+        "continue",
+        "data",
+        "do",
+        "dynamicparam",
+        "else",
+        "elseif",
+        "end",
+        "exit",
+        "filter",
+        "finally",
+        "for",
+        "foreach",
+        "from",
+        "function",
+        "if",
+        "in",
+        "param",
+        "process",
+        "return",
+        "switch",
+        "throw",
+        "trap",
+        "try",
+        "until",
+        "using",
+        "while",
+    ],
+    sql: [
+        "and",
+        "as",
+        "by",
+        "case",
+        "create",
+        "delete",
+        "distinct",
+        "drop",
+        "else",
+        "end",
+        "from",
+        "group",
+        "having",
+        "in",
+        "insert",
+        "into",
+        "is",
+        "join",
+        "left",
+        "like",
+        "limit",
+        "not",
+        "null",
+        "on",
+        "or",
+        "order",
+        "right",
+        "select",
+        "set",
+        "then",
+        "update",
+        "values",
+        "when",
+        "where",
+    ],
+};
+
+const CODE_TYPES: Record<string, string[]> = {
+    typescript: ["any", "bigint", "boolean", "never", "number", "string", "unknown", "void"],
+    javascript: ["Array", "Boolean", "Date", "Map", "Number", "Object", "Promise", "Set", "String"],
+    python: ["bool", "bytes", "dict", "float", "int", "list", "set", "str", "tuple"],
+    rust: ["bool", "char", "f32", "f64", "i32", "i64", "isize", "Result", "String", "u32", "u64", "usize", "Vec"],
+    go: ["bool", "byte", "error", "float32", "float64", "int", "int64", "rune", "string", "uint", "uint64"],
+    java: ["boolean", "byte", "char", "double", "float", "int", "long", "String", "void"],
+    c: ["bool", "char", "double", "float", "int", "long", "short", "size_t", "void"],
+    cpp: ["bool", "char", "double", "float", "int", "long", "short", "size_t", "std", "string", "void"],
+};
+
+function normalizeFenceLanguage(info: string): string {
+    const raw = info.trim().split(/\s+/)[0] ?? "";
+    const cleaned = raw.replace(/^\{?\.?/, "").replace(/\}?$/, "").toLowerCase();
+    return LANG_ALIASES[cleaned] ?? cleaned;
+}
+
+function occupiedByToken(occupied: TokenSpan[], from: number, to: number): boolean {
+    return occupied.some((span) => from < span.to && to > span.from);
+}
+
+function addCodeToken(
+    decorations: Range<Decoration>[],
+    occupied: TokenSpan[],
+    lineFrom: number,
+    start: number,
+    end: number,
+    deco: Decoration,
+) {
+    if (start >= end) return;
+    const from = lineFrom + start;
+    const to = lineFrom + end;
+    if (occupiedByToken(occupied, from, to)) return;
+    occupied.push({ from, to });
+    decorations.push(deco.range(from, to));
+}
+
+function addRegexTokens(
+    text: string,
+    lineFrom: number,
+    regex: RegExp,
+    deco: Decoration,
+    decorations: Range<Decoration>[],
+    occupied: TokenSpan[],
+    groupIndex = 0,
+) {
+    regex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+        const token = match[groupIndex] ?? match[0];
+        if (!token) continue;
+        const offset = groupIndex === 0 ? 0 : match[0].indexOf(token);
+        if (offset < 0) continue;
+        addCodeToken(
+            decorations,
+            occupied,
+            lineFrom,
+            match.index + offset,
+            match.index + offset + token.length,
+            deco,
+        );
+    }
+}
+
+function addKeywordTokens(
+    text: string,
+    lineFrom: number,
+    words: string[],
+    deco: Decoration,
+    decorations: Range<Decoration>[],
+    occupied: TokenSpan[],
+) {
+    if (words.length === 0) return;
+    const escaped = words
+        .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join("|");
+    addRegexTokens(
+        text,
+        lineFrom,
+        new RegExp(`\\b(?:${escaped})\\b`, "g"),
+        deco,
+        decorations,
+        occupied,
+    );
+}
+
+function applyFencedCodeSyntax(
+    text: string,
+    lineFrom: number,
+    lang: string,
+    decorations: Range<Decoration>[],
+) {
+    if (!lang || lang === "text" || lang === "plain" || lang === "plaintext") {
+        return;
+    }
+
+    const occupied: TokenSpan[] = [];
+    if (lang === "html" || lang === "xml") {
+        addRegexTokens(text, lineFrom, /<!--.*?-->/g, codeCommentDeco, decorations, occupied);
+        addRegexTokens(text, lineFrom, /<\/?([A-Za-z][\w:-]*)/g, codeTypeDeco, decorations, occupied, 1);
+        addRegexTokens(text, lineFrom, /\s([A-Za-z_:][\w:.-]*)=/g, codeVariableDeco, decorations, occupied, 1);
+        addRegexTokens(text, lineFrom, /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g, codeStringDeco, decorations, occupied);
+        return;
+    }
+
+    if (lang === "css" || lang === "scss" || lang === "sass" || lang === "less") {
+        addRegexTokens(text, lineFrom, /\/\*.*?\*\//g, codeCommentDeco, decorations, occupied);
+        addRegexTokens(text, lineFrom, /(--?[\w-]+)(?=\s*:)/g, codeVariableDeco, decorations, occupied, 1);
+        addRegexTokens(text, lineFrom, /([.#]?[A-Za-z_-][\w-]*)(?=\s*\{)/g, codeTypeDeco, decorations, occupied, 1);
+        addRegexTokens(text, lineFrom, /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g, codeStringDeco, decorations, occupied);
+        addRegexTokens(text, lineFrom, /\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|s|ms)?\b/gi, codeNumberDeco, decorations, occupied);
+        return;
+    }
+
+    if (lang === "python" || lang === "bash" || lang === "powershell" || lang === "yaml") {
+        addRegexTokens(text, lineFrom, /#.*/g, codeCommentDeco, decorations, occupied);
+    } else if (lang === "sql") {
+        addRegexTokens(text, lineFrom, /--.*/g, codeCommentDeco, decorations, occupied);
+    } else {
+        addRegexTokens(text, lineFrom, /\/\/.*|\/\*.*?\*\//g, codeCommentDeco, decorations, occupied);
+    }
+
+    addRegexTokens(
+        text,
+        lineFrom,
+        /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/g,
+        codeStringDeco,
+        decorations,
+        occupied,
+    );
+
+    if (lang === "json") {
+        addRegexTokens(text, lineFrom, /"([^"\\]*(?:\\.[^"\\]*)*)"\s*:/g, codeVariableDeco, decorations, occupied, 1);
+    }
+
+    addKeywordTokens(text, lineFrom, CODE_KEYWORDS[lang] ?? [], codeKeywordDeco, decorations, occupied);
+    addKeywordTokens(text, lineFrom, CODE_TYPES[lang] ?? [], codeTypeDeco, decorations, occupied);
+    addRegexTokens(text, lineFrom, /\b(?:0x[\da-f]+|\d+(?:\.\d+)?(?:e[+-]?\d+)?)\b/gi, codeNumberDeco, decorations, occupied);
+
+    addRegexTokens(text, lineFrom, /\b(?:def|function|fn|func)\s+([A-Za-z_$][\w$]*)/g, codeFunctionDeco, decorations, occupied, 1);
+    addRegexTokens(text, lineFrom, /\b(?:class|struct|interface|enum|type)\s+([A-Za-z_$][\w$]*)/g, codeTypeDeco, decorations, occupied, 1);
+    addRegexTokens(text, lineFrom, /\b([A-Za-z_$][\w$]*)\s*(?=\()/g, codeFunctionDeco, decorations, occupied, 1);
+}
 
 // ---------------------------------------------------------------------------
 // Core logic: build decorations from document content
@@ -879,6 +1460,7 @@ function buildDecorationsImpl(
         t.trim().startsWith("|") && t.indexOf("|", t.indexOf("|") + 1) !== -1;
     let inFence = false;
     let activeFence = "";
+    let activeFenceLang = "";
 
     for (let i = 1; i <= doc.lines; i++) {
         const line = doc.line(i);
@@ -888,18 +1470,23 @@ function buildDecorationsImpl(
         // Skip empty lines
         if (!text.trim()) continue;
 
-        const fenceMatch = text.match(/^(`{3,}|~{3,})/);
+        const fenceMatch = text.match(/^(`{3,}|~{3,})(.*)$/);
         if (fenceMatch) {
             if (!inFence) {
                 inFence = true;
                 activeFence = fenceMatch[1][0];
+                activeFenceLang = normalizeFenceLanguage(fenceMatch[2] ?? "");
             } else if (text.startsWith(activeFence.repeat(3))) {
                 inFence = false;
                 activeFence = "";
+                activeFenceLang = "";
             }
             continue;
         }
-        if (inFence) continue;
+        if (inFence) {
+            applyFencedCodeSyntax(text, line.from, activeFenceLang, decorations);
+            continue;
+        }
 
         // --- Headings ---
         // NOTE: the line-level heading class (mz-lp-h{level}-line) is
@@ -1471,6 +2058,29 @@ const livePreviewTheme = EditorView.baseTheme({
         borderLeft: "1px solid var(--mz-border)",
         borderRight: "1px solid var(--mz-border)",
         paddingLeft: "12px",
+    },
+    ".mz-lp-code-token-keyword": {
+        color: "var(--mz-syntax-keyword)",
+        fontWeight: "600",
+    },
+    ".mz-lp-code-token-string": {
+        color: "var(--mz-syntax-string)",
+    },
+    ".mz-lp-code-token-number": {
+        color: "var(--mz-syntax-number)",
+    },
+    ".mz-lp-code-token-comment": {
+        color: "var(--mz-syntax-comment)",
+        fontStyle: "italic",
+    },
+    ".mz-lp-code-token-function": {
+        color: "var(--mz-syntax-function)",
+    },
+    ".mz-lp-code-token-type": {
+        color: "var(--mz-syntax-type)",
+    },
+    ".mz-lp-code-token-variable": {
+        color: "var(--mz-syntax-variable)",
     },
 
     // --- Table styling ---

@@ -34,6 +34,7 @@ const IMAGE_EXTS = new Set([
     "jpeg",
     "gif",
     "webp",
+    "awebp",
     "bmp",
     "ico",
     // svg is BOTH an image AND a text file. We treat it as an image
@@ -42,6 +43,8 @@ const IMAGE_EXTS = new Set([
     // OS's "Open with Notepad" from outside the app.
     "svg",
 ]);
+
+const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);
 
 /**
  * Extensions we open in the in-app CodeMirror editor.
@@ -53,9 +56,7 @@ const IMAGE_EXTS = new Set([
  */
 const TEXT_EXTS = new Set([
     // Markdown variants
-    "md",
-    "markdown",
-    "mdx",
+    ...MARKDOWN_EXTS,
     // Plain text / logs
     "txt",
     "log",
@@ -205,6 +206,14 @@ export function getFileHandler(
 
 export function isImageExtension(ext: string): boolean {
     return IMAGE_EXTS.has(ext.toLowerCase());
+}
+
+export function isMarkdownExtension(ext: string): boolean {
+    return MARKDOWN_EXTS.has(ext.toLowerCase());
+}
+
+export function isMarkdownPath(path: string): boolean {
+    return isMarkdownExtension(getFileExtension(path));
 }
 
 export function isTextExtension(ext: string): boolean {

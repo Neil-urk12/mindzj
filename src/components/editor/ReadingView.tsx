@@ -813,6 +813,24 @@ async function renderMermaidBlocks(container: HTMLElement): Promise<void> {
     }
 }
 
+export function renderMarkdownPreviewHtml(
+    markdown: string,
+    vaultRoot: string,
+    currentFilePath: string,
+): string {
+    return markdownToHtml(markdown, {
+        vaultRoot,
+        currentFilePath,
+        footnotes: new Map(),
+    });
+}
+
+export async function enhanceMarkdownPreviewHtml(
+    container: HTMLElement,
+): Promise<void> {
+    await Promise.all([highlightCodeBlocks(container), renderMermaidBlocks(container)]);
+}
+
 // ---------------------------------------------------------------------------
 // Reading-mode search reveal
 // ---------------------------------------------------------------------------

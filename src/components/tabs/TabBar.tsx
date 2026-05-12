@@ -12,6 +12,7 @@ import { t } from "../../i18n";
 import { editorStore, type ViewMode } from "../../stores/editor";
 import type { FileContent } from "../../stores/vault";
 import { displayName } from "../../utils/displayName";
+import { isMarkdownPath } from "../../utils/fileTypes";
 
 // Tab width bounds. Each tab sizes itself to its filename via
 // `computeTabWidth` below; these constants just cap the result.
@@ -123,6 +124,7 @@ interface TabBarProps {
   onOpenSplit?: (path: string, direction: SplitDirection) => void;
   onSetViewMode?: (path: string, mode: ViewMode) => void;
   onRevealInTree?: (path: string) => void;
+  onExportPdf?: (path: string) => void;
 }
 
 interface ContextMenuItem {
@@ -231,6 +233,7 @@ export const TabBar: Component<TabBarProps> = (props) => {
     };
     const setViewMode = (mode: ViewMode) => props.onSetViewMode?.(file.path, mode);
     const currentMode = editorStore.getViewModeForFile(file.path);
+    const canExportPdf = !!props.onExportPdf && isMarkdownPath(file.path);
 
     const entries: ContextEntry[] = [];
     if (!isActive) {
@@ -244,6 +247,10 @@ export const TabBar: Component<TabBarProps> = (props) => {
     entries.push({ separator: true });
     entries.push({ label: t("context.revealInTree"), onClick: revealInTree });
     entries.push({ label: t("context.showInExplorer"), onClick: showInFileManager });
+    if (canExportPdf) {
+      entries.push({ separator: true });
+      entries.push({ label: t("context.exportPdf"), onClick: () => props.onExportPdf?.(file.path) });
+    }
     if (props.onSetViewMode) {
       entries.push({ separator: true });
       entries.push({

@@ -12,6 +12,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { vaultStore, type FileContent } from "./stores/vault";
 import { editorStore, type ViewMode } from "./stores/editor";
 import { settingsStore, type AiProviderConfig } from "./stores/settings";
@@ -52,7 +53,11 @@ import { Calendar } from "./components/sidebar/Calendar";
 import { TabBar } from "./components/tabs/TabBar";
 import { Editor } from "./components/editor/Editor";
 import { Toolbar } from "./components/editor/Toolbar";
-import { ReadingView } from "./components/editor/ReadingView";
+import {
+    ReadingView,
+    enhanceMarkdownPreviewHtml,
+    renderMarkdownPreviewHtml,
+} from "./components/editor/ReadingView";
 import { ConfirmDialog } from "./components/common/ConfirmDialog";
 import { StatusBar } from "./components/common/StatusBar";
 import { WelcomeScreen } from "./components/common/WelcomeScreen";
@@ -72,6 +77,7 @@ import { Copy, History, Mic, MicOff, Trash2, Volume2, X } from "lucide-solid";
 import { ScreenshotOverlay } from "./components/screenshot/ScreenshotOverlay";
 import { promptDialog } from "./components/common/ConfirmDialog";
 import { openFileRouted } from "./utils/openFileRouted";
+import { displayName } from "./utils/displayName";
 import {
     openSearchPanel,
     closeSearchPanel,
@@ -113,6 +119,32 @@ function normalizeVaultPath(path: string | null | undefined): string {
         .replace(/^\\\\\?\\/, "")
         .replace(/\\/g, "/")
         .toLowerCase();
+}
+
+function ensurePdfExtension(path: string): string {
+    return /\.pdf$/i.test(path) ? path : `${path}.pdf`;
+}
+
+function waitForNextFrame(): Promise<void> {
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+async function waitForPdfExportAssets(root: HTMLElement): Promise<void> {
+    const images = Array.from(root.querySelectorAll<HTMLImageElement>("img"));
+    await Promise.all(
+        images.map(
+            (img) =>
+                img.complete
+                    ? Promise.resolve()
+                    : new Promise<void>((resolve) => {
+                          const done = () => resolve();
+                          img.addEventListener("load", done, { once: true });
+                          img.addEventListener("error", done, { once: true });
+                      }),
+        ),
+    );
+    await document.fonts?.ready.catch(() => undefined);
+    await waitForNextFrame();
 }
 
 function aiQuestionHistoryStorageKey(
@@ -466,6 +498,167 @@ const App: Component = () => {
         setShortcutToast(message);
         if (shortcutToastTimer) clearTimeout(shortcutToastTimer);
         shortcutToastTimer = setTimeout(() => setShortcutToast(null), 1200);
+    }
+
+    let pdfExportInProgress = false;
+
+    function createPdfExportStyle(): HTMLStyleElement {
+        const style = document.createElement("style");
+        style.id = "mz-pdf-export-style";
+        style.textContent = `
+#mz-pdf-export-root {
+    --mz-bg-primary: #ffffff;
+    --mz-bg-secondary: #f6f8fa;
+    --mz-bg-tertiary: #f6f8fa;
+    --mz-bg-hover: #f1f4f8;
+    --mz-bg-codeblock: #0d1117;
+    --mz-text-primary: #1f2328;
+    --mz-text-secondary: #424a53;
+    --mz-text-muted: #6e7781;
+    --mz-border: #d0d7de;
+    --mz-border-strong: #8c959f;
+    --mz-accent: #0969da;
+    --mz-accent-subtle: #ddf4ff;
+}
+
+@media screen {
+    #mz-pdf-export-root {
+        position: fixed;
+        top: 0;
+        left: -100000px;
+        width: 794px;
+        min-height: 1123px;
+        visibility: hidden;
+        pointer-events: none;
+        background: #ffffff;
+        color: #1f2328;
+    }
+}
+
+@media print {
+    @page {
+        margin: 16mm;
+    }
+
+    html,
+    body {
+        width: auto !important;
+        height: auto !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+    }
+
+    body > *:not(#mz-pdf-export-root) {
+        display: none !important;
+    }
+
+    body > #mz-pdf-export-root {
+        display: block !important;
+        position: static !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        width: auto !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #1f2328 !important;
+    }
+
+    #mz-pdf-export-root .mz-reading-view {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        color: #1f2328 !important;
+    }
+
+    #mz-pdf-export-root a {
+        color: #0969da !important;
+        text-decoration: underline !important;
+    }
+
+    #mz-pdf-export-root img {
+        max-width: 100% !important;
+        break-inside: avoid;
+    }
+
+    #mz-pdf-export-root table,
+    #mz-pdf-export-root pre,
+    #mz-pdf-export-root blockquote,
+    #mz-pdf-export-root .mz-rv-code,
+    #mz-pdf-export-root .mz-rv-callout {
+        break-inside: avoid;
+    }
+
+    #mz-pdf-export-root .mz-rv-code-copy,
+    #mz-pdf-export-root .mz-rv-code-lang {
+        display: none !important;
+    }
+}
+`;
+        return style;
+    }
+
+    async function exportMarkdownPathToPdf(path: string) {
+        if (pdfExportInProgress) return;
+        const vaultRoot = vaultStore.vaultInfo()?.path ?? "";
+        if (!vaultRoot) return;
+
+        const stem = displayName(path).replace(/\.(md|markdown|mdx)$/i, "");
+        const selectedPath = await saveDialog({
+            title: t("pdfExport.dialogTitle"),
+            defaultPath: `${stem || "note"}.pdf`,
+            filters: [{ name: "PDF", extensions: ["pdf"] }],
+        });
+        if (!selectedPath) return;
+
+        pdfExportInProgress = true;
+        showShortcutToast(t("pdfExport.exporting"));
+
+        const outputPath = ensurePdfExtension(selectedPath);
+        let root: HTMLDivElement | null = null;
+        let style: HTMLStyleElement | null = null;
+        try {
+            document.getElementById("mz-pdf-export-root")?.remove();
+            document.getElementById("mz-pdf-export-style")?.remove();
+
+            await editorStore.flushAllPendingSaves();
+            const file = await invoke<FileContent>("read_file", {
+                relativePath: path,
+            });
+
+            root = document.createElement("div");
+            root.id = "mz-pdf-export-root";
+            root.setAttribute("data-source-path", path);
+
+            const content = document.createElement("div");
+            content.className = "mz-reading-view mz-pdf-export-content";
+            content.innerHTML = renderMarkdownPreviewHtml(
+                file.content,
+                vaultRoot,
+                path,
+            );
+            root.appendChild(content);
+
+            style = createPdfExportStyle();
+            document.head.appendChild(style);
+            document.body.appendChild(root);
+
+            await enhanceMarkdownPreviewHtml(content);
+            await waitForPdfExportAssets(root);
+
+            await invoke("export_current_webview_to_pdf", { outputPath });
+            console.info("[PDF] exported:", outputPath);
+            showShortcutToast(t("pdfExport.exported"));
+        } catch (error) {
+            console.warn("[PDF] export failed:", error);
+            showShortcutToast(t("pdfExport.failed"));
+        } finally {
+            root?.remove();
+            style?.remove();
+            pdfExportInProgress = false;
+        }
     }
 
     const uiScale = createMemo(() => editorStore.uiZoom() / 100);
@@ -3845,6 +4038,9 @@ const App: Component = () => {
                                             editorStore.setViewMode(mode, path)
                                         }
                                         onOpenSplit={handleOpenSplitInPane}
+                                        onExportPdf={(path) =>
+                                            void exportMarkdownPathToPdf(path)
+                                        }
                                         onReorder={(from: number, to: number) =>
                                             vaultStore.reorderOpenFiles(
                                                 from,
@@ -5392,6 +5588,11 @@ const SplitWorkspaceView: Component<{
                         active={!isSplit() || props.activeSlot === "primary"}
                         split={isSplit()}
                         onActivate={() => props.onActivatePane("primary")}
+                        onClose={
+                            isSplit()
+                                ? () => props.onClosePane("primary")
+                                : undefined
+                        }
                     />
                 </div>
                 <Show when={isSplit()}>
