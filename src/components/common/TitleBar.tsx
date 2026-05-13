@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { createPersistableWindowState } from "../../utils/windowState";
 import { editorStore } from "../../stores/editor";
+import { getClientPlatform } from "../../utils/platform";
 
 /**
  * Window control buttons (minimize, maximize/restore, close).
@@ -11,6 +12,8 @@ import { editorStore } from "../../stores/editor";
 export const WindowControls: Component = () => {
     const [isMaximized, setIsMaximized] = createSignal(false);
     const appWindow = getCurrentWindow();
+    const platform = getClientPlatform();
+    const isMac = platform === "macos";
 
     onMount(async () => {
         setIsMaximized(await appWindow.isMaximized());
@@ -88,7 +91,40 @@ export const WindowControls: Component = () => {
     };
 
     return (
-        <div style={{ display: "flex", "align-items": "center", height: "100%", "flex-shrink": "0" }}>
+        <div
+            class={`mz-window-controls mz-window-controls-${platform}`}
+            style={{ display: "flex", "align-items": "center", height: "100%", "flex-shrink": "0" }}
+        >
+            <Show when={isMac}>
+                <button
+                    class="mz-window-control mz-window-control-mac mz-window-control-close"
+                    aria-label="Close"
+                    onClick={close}
+                    onContextMenu={e => { e.preventDefault(); e.stopPropagation(); }}
+                    style={macBtnStyle("#ff5f57")}
+                >
+                    <span class="mz-window-control-glyph">x</span>
+                </button>
+                <button
+                    class="mz-window-control mz-window-control-mac mz-window-control-minimize"
+                    aria-label="Minimize"
+                    onClick={minimize}
+                    onContextMenu={e => { e.preventDefault(); e.stopPropagation(); }}
+                    style={macBtnStyle("#ffbd2e")}
+                >
+                    <span class="mz-window-control-glyph">-</span>
+                </button>
+                <button
+                    class="mz-window-control mz-window-control-mac mz-window-control-maximize"
+                    aria-label={isMaximized() ? "Restore" : "Maximize"}
+                    onClick={toggleMaximize}
+                    onContextMenu={e => { e.preventDefault(); e.stopPropagation(); }}
+                    style={macBtnStyle("#28c840")}
+                >
+                    <span class="mz-window-control-glyph">+</span>
+                </button>
+            </Show>
+            <Show when={!isMac}>
             {/* Minimize */}
             <button
                 onClick={minimize}
@@ -140,9 +176,31 @@ export const WindowControls: Component = () => {
                     <path d="M1 1l8 8M9 1l-8 8" stroke="var(--mz-text-secondary)" stroke-width="1.2" stroke-linecap="round" />
                 </svg>
             </button>
+            </Show>
         </div>
     );
 };
+
+function macBtnStyle(background: string): Record<string, string> {
+    return {
+        display: "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        width: "12px",
+        height: "12px",
+        border: "none",
+        "border-radius": "9999px",
+        background,
+        cursor: "pointer",
+        padding: "0",
+        outline: "none",
+        color: "rgba(0, 0, 0, 0.56)",
+        "font-size": "9px",
+        "line-height": "12px",
+        "font-weight": "700",
+        "-webkit-app-region": "no-drag",
+    };
+}
 
 function btnStyle(): Record<string, string> {
     return {

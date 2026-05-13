@@ -40,6 +40,7 @@ import "./styles/themes/solarized-light.css";
 import "./styles/themes/solarized-dark.css";
 import "./styles/editor.css";
 import App from "./App";
+import { installPlatformAttributes } from "./utils/platform";
 
 const root = document.getElementById("root");
 
@@ -47,4 +48,5 @@ if (!root) {
   throw new Error("Root element #root not found in DOM");
 }
 
+installPlatformAttributes();
 render(() => <App />, root);

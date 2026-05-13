@@ -7,6 +7,7 @@ import {
 } from "solid-js";
 import { toVaultAssetUrl } from "../../utils/vaultPaths";
 import { WindowControls } from "./TitleBar";
+import { getClientPlatform } from "../../utils/platform";
 
 /**
  * Standalone image viewer mounted when the window URL carries
@@ -28,6 +29,7 @@ export const ImageViewer: Component<{
     vaultPath: string;
     filePath: string;
 }> = (props) => {
+    const isMacChrome = getClientPlatform() === "macos";
     const [scale, setScale] = createSignal(1);
     const [offsetX, setOffsetX] = createSignal(0);
     const [offsetY, setOffsetY] = createSignal(0);
@@ -206,6 +208,11 @@ export const ImageViewer: Component<{
                     gap: "12px",
                 }}
             >
+                {isMacChrome ? (
+                    <div style={{ "-webkit-app-region": "no-drag", "flex-shrink": "0" }}>
+                        <WindowControls />
+                    </div>
+                ) : null}
                 <span
                     style={{
                         flex: "1",
@@ -229,9 +236,11 @@ export const ImageViewer: Component<{
                 >
                     {Math.round(scale() * 100)}%
                 </span>
-                <div style={{ "-webkit-app-region": "no-drag", "flex-shrink": "0" }}>
-                    <WindowControls />
-                </div>
+                {!isMacChrome ? (
+                    <div style={{ "-webkit-app-region": "no-drag", "flex-shrink": "0" }}>
+                        <WindowControls />
+                    </div>
+                ) : null}
             </div>
 
             {/* Viewer canvas — drag to pan, Ctrl+wheel to zoom */}

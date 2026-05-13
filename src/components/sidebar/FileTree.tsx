@@ -940,11 +940,9 @@ export const FileTree: Component<FileTreeProps> = (props) => {
 
     async function showInExplorer(path: string) {
         try {
-            const { Command } = await import("@tauri-apps/plugin-shell");
-            const fullPath = `${vaultStore.vaultInfo()?.path ?? ""}/${path}`.replace(/\//g, "\\");
-            await Command.create("explorer", ["/select,", fullPath]).execute();
+            await invoke("reveal_in_file_manager", { relativePath: path });
         } catch (e) {
-            console.error("Open in explorer failed:", e);
+            console.error("Open in file manager failed:", e);
             navigator.clipboard.writeText(path).catch(() => {});
         }
     }

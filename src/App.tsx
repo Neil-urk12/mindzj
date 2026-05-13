@@ -89,6 +89,7 @@ import {
 import { EditorView } from "@codemirror/view";
 import { t } from "./i18n";
 import { setFindQuery } from "./stores/findState";
+import { getClientPlatform } from "./utils/platform";
 
 type SidebarTab = "files" | "outline" | "search" | "calendar";
 type SplitDirection = "left" | "right" | "up" | "down";
@@ -112,13 +113,15 @@ type Point = {
 const AI_QUESTION_HISTORY_LIMIT = 500;
 const AI_PANEL_MIN_HEIGHT = 220;
 const AI_PANEL_DEFAULT_HEIGHT = 300;
+const CLIENT_PLATFORM = getClientPlatform();
+const IS_MAC_CHROME = CLIENT_PLATFORM === "macos";
 
 function normalizeVaultPath(path: string | null | undefined): string {
     if (!path) return "";
-    return path
+    const normalized = path
         .replace(/^\\\\\?\\/, "")
-        .replace(/\\/g, "/")
-        .toLowerCase();
+        .replace(/\\/g, "/");
+    return CLIENT_PLATFORM === "windows" ? normalized.toLowerCase() : normalized;
 }
 
 function ensurePdfExtension(path: string): string {
@@ -649,23 +652,45 @@ const App: Component = () => {
         return style;
     }
 
+    async function openNativePrintDialogForPdfExport(): Promise<void> {
+        await waitForNextFrame();
+        await new Promise<void>((resolve) => {
+            let finished = false;
+            let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+            const done = () => {
+                if (finished) return;
+                finished = true;
+                if (fallbackTimer) clearTimeout(fallbackTimer);
+                window.removeEventListener("afterprint", done);
+                resolve();
+            };
+
+            window.addEventListener("afterprint", done, { once: true });
+            window.print();
+            fallbackTimer = setTimeout(done, 30000);
+        });
+    }
+
     async function exportMarkdownPathToPdf(path: string) {
         if (pdfExportInProgress) return;
         const vaultRoot = vaultStore.vaultInfo()?.path ?? "";
         if (!vaultRoot) return;
 
         const stem = displayName(path).replace(/\.(md|markdown|mdx)$/i, "");
-        const selectedPath = await saveDialog({
-            title: t("pdfExport.dialogTitle"),
-            defaultPath: `${stem || "note"}.pdf`,
-            filters: [{ name: "PDF", extensions: ["pdf"] }],
-        });
-        if (!selectedPath) return;
+        const selectedPath =
+            CLIENT_PLATFORM === "windows"
+                ? await saveDialog({
+                      title: t("pdfExport.dialogTitle"),
+                      defaultPath: `${stem || "note"}.pdf`,
+                      filters: [{ name: "PDF", extensions: ["pdf"] }],
+                  })
+                : null;
+        if (CLIENT_PLATFORM === "windows" && !selectedPath) return;
 
         pdfExportInProgress = true;
         showShortcutToast(t("pdfExport.exporting"));
 
-        const outputPath = ensurePdfExtension(selectedPath);
+        const outputPath = selectedPath ? ensurePdfExtension(selectedPath) : "";
         let root: HTMLDivElement | null = null;
         let style: HTMLStyleElement | null = null;
         try {
@@ -697,9 +722,14 @@ const App: Component = () => {
             await enhanceMarkdownPreviewHtml(content);
             await waitForPdfExportAssets(root);
 
-            await invoke("export_current_webview_to_pdf", { outputPath });
-            console.info("[PDF] exported:", outputPath);
-            showShortcutToast(t("pdfExport.exported"));
+            if (CLIENT_PLATFORM === "windows") {
+                await invoke("export_current_webview_to_pdf", { outputPath });
+                console.info("[PDF] exported:", outputPath);
+                showShortcutToast(t("pdfExport.exported"));
+            } else {
+                await openNativePrintDialogForPdfExport();
+                showShortcutToast(t("pdfExport.printDialogOpened"));
+            }
         } catch (error) {
             console.warn("[PDF] export failed:", error);
             showShortcutToast(t("pdfExport.failed"));
@@ -3463,6 +3493,7 @@ const App: Component = () => {
 
     return (
         <div
+            class={`mz-app-root mz-platform-${CLIENT_PLATFORM}`}
             style={{
                 display: "flex",
                 "flex-direction": "column",
@@ -3544,9 +3575,25 @@ const App: Component = () => {
                                     "min-height": "36px",
                                 }}>
                                 {/* Left: tab icons (draggable to reorder) */}
-                                <div style={{ display: "flex", gap: "2px" }}>
-                                    <For each={sidebarTabs()}>
-                                        {(tab, idx) => (
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        "align-items": "center",
+                                        gap: IS_MAC_CHROME ? "8px" : "2px",
+                                        "min-width": "0",
+                                    }}>
+                                    <Show when={IS_MAC_CHROME}>
+                                        <div
+                                            style={{
+                                                "-webkit-app-region": "no-drag",
+                                                "flex-shrink": "0",
+                                            }}>
+                                            <WindowControls />
+                                        </div>
+                                    </Show>
+                                    <div style={{ display: "flex", gap: "2px" }}>
+                                        <For each={sidebarTabs()}>
+                                            {(tab, idx) => (
                                             <button
                                                 draggable={true}
                                                 onDragStart={(e) => {
@@ -3634,8 +3681,9 @@ const App: Component = () => {
                                                     <path d={tab.icon} />
                                                 </svg>
                                             </button>
-                                        )}
-                                    </For>
+                                            )}
+                                        </For>
+                                    </div>
                                 </div>
 
                                 {/* Right: collapse button */}
@@ -4000,13 +4048,18 @@ const App: Component = () => {
                                         style={{
                                             display: "flex",
                                             "align-items": "center",
-                                            "justify-content": "flex-end",
+                                            "justify-content": IS_MAC_CHROME
+                                                ? "flex-start"
+                                                : "flex-end",
                                             height: "var(--mz-tab-height)",
                                             background:
                                                 "var(--mz-bg-secondary)",
                                             "border-bottom":
                                                 "1px solid var(--mz-border)",
                                             "-webkit-app-region": "drag",
+                                            padding: IS_MAC_CHROME
+                                                ? "0 12px"
+                                                : "0",
                                         }}>
                                         <div
                                             style={{
@@ -4031,6 +4084,17 @@ const App: Component = () => {
                                         "1px solid var(--mz-border)",
                                     "-webkit-app-region": "drag",
                                 }}>
+                                <Show when={IS_MAC_CHROME && sidebarCollapsed()}>
+                                    <div
+                                        style={{
+                                            "flex-shrink": "0",
+                                            padding: "0 10px 0 12px",
+                                            "-webkit-app-region": "no-drag",
+                                        }}>
+                                        <WindowControls />
+                                    </div>
+                                </Show>
+
                                 {/* Expand sidebar button (when collapsed) */}
                                 <Show when={sidebarCollapsed()}>
                                     <button
@@ -4159,13 +4223,15 @@ const App: Component = () => {
                                 />
 
                                 {/* Window controls: minimize, maximize, close (never shrinks, always visible) */}
-                                <div
-                                    style={{
-                                        "flex-shrink": "0",
-                                        "-webkit-app-region": "no-drag",
-                                    }}>
-                                    <WindowControls />
-                                </div>
+                                <Show when={!IS_MAC_CHROME}>
+                                    <div
+                                        style={{
+                                            "flex-shrink": "0",
+                                            "-webkit-app-region": "no-drag",
+                                        }}>
+                                        <WindowControls />
+                                    </div>
+                                </Show>
                             </div>
 
                             {/* Editor area — uses createMemo to derive stable values so

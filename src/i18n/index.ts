@@ -125,6 +125,7 @@ const MESSAGES: Record<string, TranslationMap> = {
   "pdfExport.dialogTitle": { "zh-CN": "导出 Markdown 为 PDF", en: "Export Markdown as PDF", ja: "Markdown を PDF として書き出し", fr: "Exporter le Markdown en PDF", de: "Markdown als PDF exportieren", es: "Exportar Markdown como PDF" },
   "pdfExport.exporting": { "zh-CN": "正在导出 PDF...", en: "Exporting PDF...", ja: "PDF を書き出し中...", fr: "Exportation du PDF...", de: "PDF wird exportiert...", es: "Exportando PDF..." },
   "pdfExport.exported": { "zh-CN": "PDF 已导出", en: "PDF exported", ja: "PDF を書き出しました", fr: "PDF exporté", de: "PDF exportiert", es: "PDF exportado" },
+  "pdfExport.printDialogOpened": { "zh-CN": "请在打印窗口中保存为 PDF", en: "Save as PDF in the print window", ja: "印刷ウィンドウで PDF として保存してください", fr: "Enregistrez en PDF dans la fenêtre d’impression", de: "Im Druckfenster als PDF speichern", es: "Guarda como PDF en la ventana de impresión" },
   "pdfExport.failed": { "zh-CN": "PDF 导出失败", en: "PDF export failed", ja: "PDF の書き出しに失敗しました", fr: "Échec de l’export PDF", de: "PDF-Export fehlgeschlagen", es: "Error al exportar PDF" },
   "context.readingView": { "zh-CN": "阅读模式", en: "Reading view", ja: "閲覧モード", fr: "Mode lecture", de: "Lesemodus", es: "Modo lectura" },
   "context.editMode": { "zh-CN": "编辑模式", en: "Edit mode", ja: "編集モード", fr: "Mode édition", de: "Bearbeitungsmodus", es: "Modo edición" },
