@@ -116,6 +116,58 @@ fn sync_plugin_dir_recursive(src: &Path, dst: &Path, preserve_data_json: bool) -
     Ok(())
 }
 
+fn plugin_code_files_match(src: &Path, dst: &Path) -> Result<bool, CommandError> {
+    if !dst.exists() {
+        return Ok(false);
+    }
+
+    for entry in std::fs::read_dir(src).map_err(|e| CommandError {
+        code: "IO_ERROR".into(),
+        message: format!("Failed to read directory '{}': {}", src.display(), e),
+    })? {
+        let entry = entry.map_err(|e| CommandError {
+            code: "IO_ERROR".into(),
+            message: format!("Failed to read directory entry in '{}': {}", src.display(), e),
+        })?;
+        let source_path = entry.path();
+        let target_path = dst.join(entry.file_name());
+
+        if source_path.is_dir() {
+            if !plugin_code_files_match(&source_path, &target_path)? {
+                return Ok(false);
+            }
+            continue;
+        }
+
+        if source_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| name.eq_ignore_ascii_case("data.json"))
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
+        if !target_path.exists() {
+            return Ok(false);
+        }
+
+        let source_bytes = std::fs::read(&source_path).map_err(|e| CommandError {
+            code: "IO_ERROR".into(),
+            message: format!("Failed to read '{}': {}", source_path.display(), e),
+        })?;
+        let target_bytes = std::fs::read(&target_path).map_err(|e| CommandError {
+            code: "IO_ERROR".into(),
+            message: format!("Failed to read '{}': {}", target_path.display(), e),
+        })?;
+        if source_bytes != target_bytes {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
 fn bundled_default_plugins_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
     let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("resources")
@@ -180,14 +232,17 @@ fn sync_default_plugins_from_dir(source_root: &Path, plugins_dir: &Path) -> Resu
         };
         let target_path = plugins_dir.join(entry.file_name());
         let installed_info = read_plugin_manifest_info(&target_path);
+        let code_files_match = plugin_code_files_match(&source_path, &target_path)?;
         let should_sync = !target_path.exists()
             || installed_info.is_none()
             || installed_info
                 .as_ref()
                 .map(|(_, version)| version.as_str())
                 != Some(bundled_info.1.as_str())
+            || !code_files_match
             || !target_path.join("main.js").exists()
-            || !target_path.join("manifest.json").exists();
+            || !target_path.join("manifest.json").exists()
+            || !target_path.join("data.json").exists();
 
         if should_sync {
             sync_plugin_dir_recursive(&source_path, &target_path, true)?;

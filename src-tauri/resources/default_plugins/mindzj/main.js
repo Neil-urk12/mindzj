@@ -3306,8 +3306,15 @@ var _MindMapView = class extends import_obsidian.TextFileView {
     this.proxyNodeId = null;
     this.proxyComposing = false;
     this.mdOutlineTimer = null;
+    this.lastActiveAt = 0;
     this._kd = (e) => {
       var _a;
+      const targetEl = e.target instanceof Element ? e.target : null;
+      const activeEl = document.activeElement instanceof Element ? document.activeElement : null;
+      const ownsTarget = !targetEl || targetEl === document.body || targetEl === document.documentElement || this.containerEl?.contains(targetEl);
+      const ownsFocus = !activeEl || activeEl === document.body || activeEl === document.documentElement || this.containerEl?.contains(activeEl);
+      if (this.containerEl && !ownsTarget && !ownsFocus)
+        return;
       if (!this.isAct() || this.mdMode || this.isExtInput(e))
         return;
       if (this.searchBar && this.searchBar.contains(document.activeElement))
@@ -3403,7 +3410,8 @@ var _MindMapView = class extends import_obsidian.TextFileView {
         this.zoomTo(1);
         return;
       }
-      if (this.matchKey(e, this.kb.addChild)) {
+      const plainTabForChild = String(this.kb.addChild || "Tab").toLowerCase() === "tab" && (e.key === "Tab" || e.code === "Tab") && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
+      if (plainTabForChild || this.matchKey(e, this.kb.addChild)) {
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -3415,7 +3423,8 @@ var _MindMapView = class extends import_obsidian.TextFileView {
           this.addChildNode();
         return;
       }
-      if (this.matchKey(e, this.kb.addSibling) && !e.ctrlKey && !e.metaKey) {
+      const plainEnterForSibling = String(this.kb.addSibling || "Enter").toLowerCase() === "enter" && (e.key === "Enter" || e.code === "Enter" || e.key === "Return") && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
+      if ((plainEnterForSibling || this.matchKey(e, this.kb.addSibling)) && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -3833,9 +3842,12 @@ var _MindMapView = class extends import_obsidian.TextFileView {
     });
     this.bindEvts();
     window.addEventListener("keydown", this._kd, true);
+    document.addEventListener("keydown", this._kd, true);
+    this.cc.addEventListener("keydown", this._kd, true);
     window.addEventListener("keyup", this._ku, true);
     window.addEventListener("mouseup", this._mu, true);
     this.uiOk = true;
+    this.markActive();
     this.updateToolbarVisibility();
     this.updateDevPanel();
     setTimeout(() => {
@@ -3858,8 +3870,13 @@ var _MindMapView = class extends import_obsidian.TextFileView {
     this.dragCv = false;
     this.liveTA = null;
     window.removeEventListener("keydown", this._kd, true);
+    document.removeEventListener("keydown", this._kd, true);
+    if (this.cc)
+      this.cc.removeEventListener("keydown", this._kd, true);
     window.removeEventListener("keyup", this._ku, true);
     window.removeEventListener("mouseup", this._mu, true);
+    if (_MindMapView.activeInstance === this)
+      _MindMapView.activeInstance = null;
     if (this.animId)
       cancelAnimationFrame(this.animId);
   }
@@ -3922,6 +3939,10 @@ var _MindMapView = class extends import_obsidian.TextFileView {
       this.popClose();
       this.popClose = null;
     }
+  }
+  markActive() {
+    _MindMapView.activeInstance = this;
+    this.lastActiveAt = Date.now();
   }
   updateDevPanel() {
     var _a, _b;
@@ -4803,7 +4824,9 @@ var _MindMapView = class extends import_obsidian.TextFileView {
     });
     const br = m.createEl("div");
     br.addClass("mz-modal-btns");
-    br.createEl("button", { text: t("sm.reset") }).addEventListener(
+    const resetBtn = br.createEl("button", { text: t("sm.reset") });
+    resetBtn.addClass("mz-modal-btn", "mz-modal-btn-secondary");
+    resetBtn.addEventListener(
       "click",
       () => {
         this.applyStyle({ ...getDefaultStyleForTheme(this.plugin.settings.theme) });
@@ -5183,7 +5206,13 @@ var _MindMapView = class extends import_obsidian.TextFileView {
     return this.style.connectionColor;
   }
   isAct() {
-    return this.app.workspace.getActiveViewOfType(_MindMapView) === this;
+    var _a, _b;
+    if (_MindMapView.activeInstance === this)
+      return true;
+    if (this.app.workspace.getActiveViewOfType(_MindMapView) === this)
+      return true;
+    const ae = document.activeElement;
+    return !!(ae && (((_a = this.containerEl) == null ? void 0 : _a.contains(ae)) || ae === this.cc || ((_b = this.cc) == null ? void 0 : _b.contains(ae))));
   }
   isExtInput(e) {
     var _a;
@@ -5921,6 +5950,7 @@ var _MindMapView = class extends import_obsidian.TextFileView {
       if (this.spaceDown)
         return;
       e.stopPropagation();
+      this.markActive();
       (_a = this.cc) == null ? void 0 : _a.focus({ preventScroll: true });
       this.closeMenu();
       const now = Date.now();
@@ -6436,6 +6466,7 @@ var _MindMapView = class extends import_obsidian.TextFileView {
       const tgt = e.target;
       if (tgt.tagName.toLowerCase() === "textarea")
         return;
+      this.markActive();
       cc.focus({ preventScroll: true });
       this.closeMenu();
       if (this.spaceDown) {
@@ -6834,6 +6865,7 @@ var _MindMapView = class extends import_obsidian.TextFileView {
 var MindMapView = _MindMapView;
 MindMapView.clipboard = null;
 MindMapView.clipboardText = null;
+MindMapView.activeInstance = null;
 
 // src/StylePanelView.ts
 var import_obsidian2 = require("obsidian");
@@ -7090,7 +7122,9 @@ var StylePanelView = class extends import_obsidian2.ItemView {
     mkColor(s6, t("sm.tbBtnText"), "toolbarBtnTextColor");
     const br = ct.createEl("div");
     br.addClass("mz-sp-btns");
-    br.createEl("button", { text: t("sm.reset") }).addEventListener(
+    const resetBtn = br.createEl("button", { text: t("sm.reset") });
+    resetBtn.addClass("mz-modal-btn", "mz-modal-btn-secondary");
+    resetBtn.addEventListener(
       "click",
       () => {
         const v = this.getView();

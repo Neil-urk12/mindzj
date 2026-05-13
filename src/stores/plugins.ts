@@ -1182,6 +1182,11 @@ function setActivePluginView(handle: string, notify: boolean): any | null {
     if (view.plugin?.app?.workspace) {
         view.plugin.app.workspace.activeLeaf = leaf;
     }
+    if (typeof view.markActive === "function") {
+        try {
+            view.markActive();
+        } catch {}
+    }
 
     if (notify) {
         const detail = {

@@ -169,45 +169,18 @@ export const SettingsModal: Component<SettingsModalProps> = (props) => {
     let modalRootRef: HTMLDivElement | undefined;
     let aiApiKeyLoadToken = 0;
 
-    function isTextInputFocusTarget(
-        element: Element | null,
-    ): element is HTMLElement {
-        if (!(element instanceof HTMLElement)) return false;
-        if (element.isContentEditable) return true;
-        if (element instanceof HTMLTextAreaElement) return true;
-        if (!(element instanceof HTMLInputElement)) return false;
-
-        return [
-            "",
-            "email",
-            "number",
-            "password",
-            "search",
-            "tel",
-            "text",
-            "url",
-        ].includes(element.type);
-    }
-
     function handleKeydown(e: KeyboardEvent) {
         if (e.key !== "Escape") return;
-        const activeElement = document.activeElement;
-        if (
-            modalRootRef?.contains(activeElement) &&
-            isTextInputFocusTarget(activeElement)
-        ) {
-            e.preventDefault();
-            e.stopPropagation();
-            activeElement.blur();
-            return;
-        }
-
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         props.onClose();
     }
 
     onMount(() => {
         // Capture phase so we handle Escape before any input inside the
         // plugin's injected settings UI can eat the keydown event.
+        window.addEventListener("keydown", handleKeydown, true);
         document.addEventListener("keydown", handleKeydown, true);
         // Listen for plugin settings navigation from plugin's openPluginSettings()
         const handleNav = (e: Event) => {
@@ -228,9 +201,10 @@ export const SettingsModal: Component<SettingsModalProps> = (props) => {
             document.removeEventListener("mindzj:settings-navigate", handleNav),
         );
     });
-    onCleanup(() =>
-        document.removeEventListener("keydown", handleKeydown, true),
-    );
+    onCleanup(() => {
+        window.removeEventListener("keydown", handleKeydown, true);
+        document.removeEventListener("keydown", handleKeydown, true);
+    });
 
     const s = () => settingsStore.settings();
     const set = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
