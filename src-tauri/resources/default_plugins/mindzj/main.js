@@ -5219,8 +5219,10 @@ var _MindMapView = class extends import_obsidian.TextFileView {
     const t2 = e.target;
     if (!t2)
       return false;
-    if (this.proxyComposing || t2 === this.proxyTA)
+    if (this.proxyComposing)
       return true;
+    if (t2 === this.proxyTA)
+      return false;
     const tag = t2.tagName.toLowerCase();
     if (tag === "input" || tag === "textarea" || tag === "select") {
       return !((_a = this.svgCt) == null ? void 0 : _a.contains(t2));
