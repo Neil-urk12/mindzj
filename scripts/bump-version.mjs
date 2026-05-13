@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Bump version across all 4 project files + git tag + push in one command.
+ * Bump version across all release metadata files + git tag + push in one command.
  *
  * Usage:
  *   npm run bump 0.2.0          # set version + tag + push
@@ -9,12 +9,14 @@
  * What it does:
  *   1. Updates version in:
  *      - package.json
+ *      - package-lock.json
+ *      - Cargo.lock
  *      - src-tauri/tauri.conf.json
  *      - src-tauri/Cargo.toml
  *      - cli/Cargo.toml
  *      - src/components/settings/SettingsModal.tsx (APP_VERSION constant
- *        shown in Settings → About)
- *   2. Runs: git add → git commit → git tag v{version} → git push → git push --tags
+ *        shown in Settings -> About)
+ *   2. Runs: git add -> git commit -> git tag v{version} -> git push -> git push --tags
  */
 
 import { readFileSync, writeFileSync } from "fs";
@@ -63,6 +65,47 @@ const files = [
   },
 ];
 
+const syncPackageLockVersion = () => {
+  const path = "package-lock.json";
+  const abs = resolve(root, path);
+  const lock = JSON.parse(readFileSync(abs, "utf-8"));
+
+  if (!lock.packages || !lock.packages[""]) {
+    console.error(`  package-lock.json: root package entry not found`);
+    process.exit(1);
+  }
+
+  const before = `${lock.version} / ${lock.packages[""].version}`;
+  lock.version = version;
+  lock.packages[""].version = version;
+
+  console.log(`  ${path}  version ${before}  ->  ${version} / ${version}`);
+  if (!dry) writeFileSync(abs, `${JSON.stringify(lock, null, 2)}\n`, "utf-8");
+};
+
+const syncCargoLockVersion = () => {
+  const path = "Cargo.lock";
+  const abs = resolve(root, path);
+  let content = readFileSync(abs, "utf-8");
+  const packages = ["mindzj", "mindzj-cli"];
+
+  for (const packageName of packages) {
+    const pattern = new RegExp(
+      `(\\[\\[package\\]\\][\\r\\n]+name = "${packageName}"[\\r\\n]+version = ")[^"]+(")`,
+    );
+    const match = content.match(pattern);
+    if (!match) {
+      console.error(`  Cargo.lock: package ${packageName} not found`);
+      process.exit(1);
+    }
+
+    console.log(`  ${path}  ${packageName} ${match[0].match(/version = "([^"]+)"/)[1]}  ->  ${version}`);
+    content = content.replace(pattern, `$1${version}$2`);
+  }
+
+  if (!dry) writeFileSync(abs, content, "utf-8");
+};
+
 console.log(`\n  Bumping to ${version}${dry ? " (dry run)" : ""}\n`);
 
 for (const f of files) {
@@ -77,6 +120,9 @@ for (const f of files) {
   console.log(`  ✓ ${f.path}  ${match[0]}  →  ${f.replace}`);
   if (!dry) writeFileSync(abs, updated, "utf-8");
 }
+
+syncPackageLockVersion();
+syncCargoLockVersion();
 
 if (dry) {
   console.log("\n  Dry run — no files written, no git commands.\n");
@@ -97,7 +143,7 @@ const run = (cmd, { allowFail = false } = {}) => {
 };
 
 console.log("");
-run(`git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml cli/Cargo.toml src/components/settings/SettingsModal.tsx`);
+run(`git add package.json package-lock.json Cargo.lock src-tauri/tauri.conf.json src-tauri/Cargo.toml cli/Cargo.toml src/components/settings/SettingsModal.tsx`);
 // Commit may fail if version files weren't actually changed (e.g. re-running
 // bump with the same version). That's OK — we still proceed to tag + push.
 run(`git commit -m "chore: bump version to ${version}"`, { allowFail: true });

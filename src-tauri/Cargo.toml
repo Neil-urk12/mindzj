@@ -5,86 +5,86 @@ description = "AI-native, CLI-first, open-source local note-taking system"
 authors = ["SuperJohn"] 
 license = "AGPL-3.0-or-later"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.77.2"
 
 [lib]
 name = "mindzj_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "=2.6.1", features = [] }
 
 [dependencies]
 # Tauri core
-tauri = { version = "2", features = ["protocol-asset", "image-png", "devtools"] }
-tauri-plugin-fs = "2"
-tauri-plugin-dialog = "2"
-tauri-plugin-shell = "2"
-tauri-plugin-store = "2"
-tauri-plugin-clipboard-manager = "2"
-tauri-plugin-global-shortcut = "2"
+tauri = { version = "=2.10.1", features = ["protocol-asset", "image-png", "devtools"] }
+tauri-plugin-fs = "=2.4.5"
+tauri-plugin-dialog = "=2.6.0"
+tauri-plugin-shell = "=2.3.5"
+tauri-plugin-store = "=2.4.2"
+tauri-plugin-clipboard-manager = "=2.3.2"
+tauri-plugin-global-shortcut = "=2.3.1"
 
 # Serialization
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.149"
 
 # Async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "=1.52.3", features = ["full"] }
 
 # File system watching
-notify = "7"
+notify = "=7.0.0"
 
 # Full-text search
-tantivy = "0.22"
+tantivy = "=0.22.1"
 
 # SQLite for metadata index
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "=0.32.1", features = ["bundled"] }
 
 # Logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 # File-based tracing output (Windows release builds are GUI-subsystem
 # and have no stdout, so we tee logs to %LOCALAPPDATA%/MindZJ/logs/
 # for post-mortem diagnosis).
-tracing-appender = "0.2"
+tracing-appender = "=0.2.5"
 
 # Error handling
-thiserror = "2"
-anyhow = "1"
+thiserror = "=2.0.18"
+anyhow = "=1.0.102"
 
 # UUID generation
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "=1.23.1", features = ["v4"] }
 
 # Date/time
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "=0.4.44", features = ["serde"] }
 
 # Path utilities
-dirs = "6"
+dirs = "=6.0.0"
 
 # Hashing (for file integrity, API keys)
-sha2 = "0.10"
-hex = "0.4"
+sha2 = "=0.10.9"
+hex = "=0.4.3"
 
 # Secure random
-rand = "0.8"
+rand = "=0.8.6"
 
 # URL encoding for window params
-urlencoding = "2"
+urlencoding = "=2.1.3"
 
 # Keyring (system credential storage for API keys)
-keyring = "3"
+keyring = "=3.6.3"
 
 # HTTP client used by the AI provider proxy. Requests are issued from
 # the Tauri backend so local model servers do not receive browser CORS
 # preflight OPTIONS requests.
-reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+reqwest = { version = "=0.12.28", default-features = false, features = ["json", "multipart", "rustls-tls"] }
 
 # Base64 encoding/decoding (for binary file writes from frontend)
-base64 = "0.22"
+base64 = "=0.22.1"
 
 # Screenshot capture (cross-platform screen capture).
 #
-# Pinned to 0.9.x (the current stable) rather than the older
+# Pinned to 0.9.4 rather than the older
 # 0.0.14 we used to ship because 0.0.14 has a Rust type-
 # inference regression on macOS that breaks GitHub Actions
 # builds on `macos-latest`:
@@ -95,13 +95,13 @@ base64 = "0.22"
 # The `image` feature gates xcap's `RgbaImage -> image::ImageBuffer`
 # conversion, which is what we use to encode PNGs in
 # `api/screenshot_api.rs` via `img.write_to(&mut buf, ...)`.
-xcap = { version = "0.9", features = ["image"] }
+xcap = { version = "=0.9.4", features = ["image"] }
 
 # Image encoding (PNG encoding for screenshot data)
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "=0.25.10", default-features = false, features = ["png"] }
 
 # Graceful Ctrl+C handling so `tauri dev` exits 0 instead of 0xC000013A
-ctrlc = "3"
+ctrlc = "=3.5.2"
 
 # Windows-only: low-level keyboard hook (`WH_KEYBOARD_LL`) used to
 # catch Ctrl+Alt+Left/Right tab-switch shortcuts BEFORE Intel/AMD
@@ -112,7 +112,7 @@ ctrlc = "3"
 # `RegisterHotKey` (which `tauri-plugin-global-shortcut` uses) sits
 # ABOVE the driver hook table so it also loses the race.
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.58", features = [
+windows = { version = "=0.58.0", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Input_KeyboardAndMouse",
@@ -128,19 +128,19 @@ windows = { version = "0.58", features = [
 #
 # The version is pinned to match Tauri 2.10's transitive dep so Cargo
 # doesn't link two copies of webview2-com into the final binary.
-webview2-com = "0.38"
+webview2-com = "=0.38.2"
 # `webview2-com-sys 0.38` is generated against `windows-core 0.61`, so
 # its COM interfaces only implement the `Interface` trait from that
-# version. We keep our own `windows = "0.58"` for the keyboard-hook
-# module, and add a separate `windows-core = "0.61"` dep purely so the
+# version. We keep our own `windows = "=0.58.0"` for the keyboard-hook
+# module, and add a separate `windows-core = "=0.61.2"` dep purely so the
 # `cast::<ICoreWebView2Settings3>()` call in
 # `disable_webview2_browser_accelerator_keys` can resolve the right
 # trait impl.
-windows-core = "0.61"
+windows-core = "=0.61.2"
 
 [features]
 default = []
 custom-protocol = ["tauri/custom-protocol"]
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = "=3.27.0"
