@@ -1007,7 +1007,7 @@ export const FileTree: Component<FileTreeProps> = (props) => {
         if (!isDir && props.onExportPdf && isMarkdownPath(path)) {
             items.push({
                 label: t("context.exportPdf"),
-                icon: "\uD83D\uDCC4",
+                icon: "\uD83D\uDCD9",
                 separator: true,
                 action: () => props.onExportPdf?.(path),
             });
