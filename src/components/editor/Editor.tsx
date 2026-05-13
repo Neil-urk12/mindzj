@@ -2682,7 +2682,7 @@ export const Editor: Component<EditorProps> = (props) => {
                     effects: [
                         EditorView.scrollIntoView(lineInfo.from, {
                             y: "start",
-                            yMargin: 0,
+                            yMargin: 4,
                         }),
                         addLineFlash.of(lineInfo.from),
                     ],

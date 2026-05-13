@@ -578,6 +578,7 @@ const headingLineDeco: Record<number, Decoration> = {
 };
 
 const boldDeco = Decoration.mark({ class: "mz-lp-bold" });
+const italicDeco = Decoration.mark({ class: "mz-lp-italic" });
 const strikethroughDeco = Decoration.mark({ class: "mz-lp-strikethrough" });
 const highlightDeco = Decoration.mark({ class: "mz-lp-highlight" });
 const inlineCodeDeco = Decoration.mark({ class: "mz-lp-inline-code" });
@@ -1635,6 +1636,17 @@ function buildDecorationsImpl(
                 2,
                 2,
                 boldDeco,
+                decorations,
+            );
+
+            // Italic: exactly one asterisk only. Avoid list markers and bold.
+            applyInlineFormat(
+                text,
+                line.from,
+                /(?<!\*)\*(?![\s*])(.+?)(?<![\s*])\*(?!\*)/g,
+                1,
+                1,
+                italicDeco,
                 decorations,
             );
 

@@ -576,6 +576,12 @@ function renderInline(text: string, ctx: RenderContext): string {
         "<strong>$1</strong>",
     );
 
+    // Italic: exactly one asterisk only. Avoid list markers and bold.
+    result = result.replace(
+        /(?<!\*)\*(?![\s*])(.+?)(?<![\s*])\*(?!\*)/g,
+        "<em>$1</em>",
+    );
+
     // Strikethrough: ~~text~~
     result = result.replace(/~~(.+?)~~/g, "<del>$1</del>");
 
@@ -1357,7 +1363,7 @@ export const ReadingView: Component<ReadingViewProps> = (props) => {
                     const targetTop = target.getBoundingClientRect().top;
                     const offset =
                         targetTop - containerTop + scrollContainerRef.scrollTop;
-                    scrollContainerRef.scrollTop = offset;
+                    scrollContainerRef.scrollTop = Math.max(0, offset - 3);
 
                     // Paint the same search-reveal flash on the target
                     // for ~1s so the user's eye can latch onto where

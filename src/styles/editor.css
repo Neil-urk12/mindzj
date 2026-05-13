@@ -605,6 +605,15 @@ html[data-mz-platform="linux"] .mz-sidebar-file-list-scroll {
    itself. Matches the 7px thin thumb on systems where the webkit
    rules aren't honored (shouldn't happen in Tauri's WebView2 but
    cheap insurance). */
+html[data-mz-platform="linux"] .mz-pane-wrap-secondary .cm-scroller,
+html[data-mz-platform="linux"]
+    .mz-pane-wrap-secondary
+    .mz-reading-scroll-container,
+html[data-mz-platform="linux"] .mz-pane-wrap-secondary .mz-file-preview-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--mz-scrollbar-thumb) var(--mz-scrollbar-track);
+    scrollbar-gutter: stable;
+}
 
 html[data-theme="dark"] .cm-editor .cm-panels-bottom {
     border-top: 1px solid #474747;
