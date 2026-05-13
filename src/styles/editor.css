@@ -1257,6 +1257,56 @@ html[data-theme-mode="light"]
     filter: brightness(0.85) contrast(1.2);
 }
 
+/* Native select popups can ignore app colours on Linux/macOS unless the
+   control advertises the dark color scheme. Keep this scoped to settings
+   and non-Windows platforms so Windows' existing select rendering is left
+   untouched. */
+html[data-theme-mode="dark"][data-mz-platform="macos"]
+    .mz-settings-modal
+    select,
+html[data-theme-mode="dark"][data-mz-platform="linux"]
+    .mz-settings-modal
+    select {
+    color-scheme: dark;
+    background-color: var(--mz-bg-primary) !important;
+    color: var(--mz-text-primary) !important;
+    border-color: var(--mz-border) !important;
+}
+
+html[data-theme-mode="dark"][data-mz-platform="macos"]
+    .mz-settings-modal
+    select:focus,
+html[data-theme-mode="dark"][data-mz-platform="linux"]
+    .mz-settings-modal
+    select:focus {
+    outline: 1px solid var(--mz-accent);
+    outline-offset: 0;
+}
+
+html[data-theme-mode="dark"][data-mz-platform="macos"]
+    .mz-settings-modal
+    select
+    option,
+html[data-theme-mode="dark"][data-mz-platform="linux"]
+    .mz-settings-modal
+    select
+    option {
+    background-color: var(--mz-bg-primary);
+    color: var(--mz-text-primary);
+}
+
+html[data-theme-mode="dark"][data-mz-platform="macos"]
+    .mz-settings-modal
+    select
+    option:checked,
+html[data-theme-mode="dark"][data-mz-platform="linux"]
+    .mz-settings-modal
+    select
+    option:checked {
+    background-color: var(--mz-bg-active);
+    color: var(--mz-text-primary);
+}
+
 /* Task list `[x]` / `[ ]` markers — keep them visible in dark mode.
    Before this rule the brackets fell through to the comment color which
    was almost invisible against the dark background. */

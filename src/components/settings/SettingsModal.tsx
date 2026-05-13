@@ -713,6 +713,7 @@ export const SettingsModal: Component<SettingsModalProps> = (props) => {
     return (
         <div
             ref={modalRootRef}
+            class="mz-settings-modal"
             style={{
                 position: "fixed",
                 inset: "0",
