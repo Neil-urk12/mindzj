@@ -29,6 +29,7 @@ import {
     hasPluginViewForExtension,
     mountPluginView,
     destroyPluginView,
+    activatePluginView,
     isPluginSaving,
 } from "./stores/plugins";
 import {
@@ -5915,6 +5916,7 @@ const PaneFileView: Component<{
                                 filePath={props.filePath}
                                 content={file()!.content}
                                 extension={fileExt()}
+                                active={props.active}
                             />
                         </Show>
                     }>
@@ -5937,6 +5939,7 @@ const PluginViewHost: Component<{
     filePath: string;
     content: string;
     extension: string;
+    active: boolean;
 }> = (props) => {
     let containerRef: HTMLDivElement | undefined;
     // Each PluginViewHost instance owns its OWN mount handle returned
@@ -5977,6 +5980,12 @@ const PluginViewHost: Component<{
             },
         ),
     );
+
+    createEffect(() => {
+        if (props.active && currentHandle) {
+            activatePluginView(currentHandle);
+        }
+    });
 
     onCleanup(() => {
         if (currentHandle) destroyPluginView(currentHandle);

@@ -1,6 +1,7 @@
 import { createSignal, createRoot } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { vaultStore } from "./vault";
+import { getClientPlatform } from "../utils/platform";
 import { toVaultAssetUrl } from "../utils/vaultPaths";
 
 function getScopedPluginLocalStorageKey(pluginId: string, key: string) {
@@ -1151,6 +1152,7 @@ const pluginExtensionMap = new Map<string, string>();
  * matches by `view.file?.path`.
  */
 const activePluginViews = new Map<string, any>();
+let activePluginViewHandle: string | null = null;
 
 /** Monotonic counter for generating unique mount handles. */
 let _pluginMountCounter = 0;
@@ -1161,6 +1163,44 @@ const _pluginSavingPaths = new Set<string>();
 /** Normalize path separators for reliable comparison on Windows */
 function _normPath(p: string): string {
     return p.replace(/\\/g, "/");
+}
+
+function leafForPluginView(view: any): any {
+    return view?.leaf ?? { view, app: view?.app };
+}
+
+function setActivePluginView(handle: string, notify: boolean): any | null {
+    const view = activePluginViews.get(handle);
+    if (!view) return null;
+
+    activePluginViewHandle = handle;
+    const leaf = leafForPluginView(view);
+
+    if (view.app?.workspace) {
+        view.app.workspace.activeLeaf = leaf;
+    }
+    if (view.plugin?.app?.workspace) {
+        view.plugin.app.workspace.activeLeaf = leaf;
+    }
+
+    if (notify) {
+        const detail = {
+            event: "active-leaf-change",
+            leaf,
+            filePath: view.file?.path,
+            viewType: view.getViewType?.(),
+        };
+        document.dispatchEvent(
+            new CustomEvent("mindzj:workspace-trigger", { detail }),
+        );
+        document.dispatchEvent(new CustomEvent("mindzj:outline-refresh"));
+    }
+
+    return view;
+}
+
+export function activatePluginView(handle: string): any | null {
+    return setActivePluginView(handle, true);
 }
 
 /**
@@ -1350,6 +1390,16 @@ export async function mountPluginView(
         // other guards check isAct() which queries activePluginViews.
         const handle = `${filePath}::${++_pluginMountCounter}`;
         activePluginViews.set(handle, view);
+        setActivePluginView(handle, false);
+
+        const activateMountedView = () => {
+            if (activePluginViewHandle === handle) return;
+            activatePluginView(handle);
+        };
+        mountEl.addEventListener("mousedown", activateMountedView, true);
+        mountEl.addEventListener("focusin", activateMountedView, true);
+        view.__mindzjActivatePluginView = activateMountedView;
+        view.__mindzjActivatePluginViewMountEl = mountEl;
 
         // Set this leaf as the active leaf so workspace.activeLeaf is correct
         if (app.workspace) {
@@ -1363,6 +1413,8 @@ export async function mountPluginView(
         if (typeof view.setViewData === "function") {
             await view.setViewData(content, true);
         }
+
+        activatePluginView(handle);
 
         console.log(
             `[Plugin View] Mounted view for ${filePath} (handle: ${handle}, type: ${viewType})`,
@@ -1394,7 +1446,26 @@ export function destroyPluginView(handle: string) {
                 view.containerEl.remove();
             }
         } catch {}
+        try {
+            const activateMountedView = view.__mindzjActivatePluginView;
+            const mountEl = view.__mindzjActivatePluginViewMountEl;
+            if (activateMountedView && mountEl) {
+                mountEl.removeEventListener(
+                    "mousedown",
+                    activateMountedView,
+                    true,
+                );
+                mountEl.removeEventListener(
+                    "focusin",
+                    activateMountedView,
+                    true,
+                );
+            }
+        } catch {}
         activePluginViews.delete(handle);
+        if (activePluginViewHandle === handle) {
+            activePluginViewHandle = null;
+        }
     }
 }
 
@@ -1404,6 +1475,10 @@ export function destroyPluginView(handle: string) {
  * Outline etc. that just need "some view for this file".
  */
 export function getActivePluginView(filePath: string): any | null {
+    if (activePluginViewHandle) {
+        const activeView = activePluginViews.get(activePluginViewHandle);
+        if (activeView?.file?.path === filePath) return activeView;
+    }
     for (const view of activePluginViews.values()) {
         if (view?.file?.path === filePath) return view;
     }
@@ -1418,6 +1493,26 @@ let _workspaceBridgesInstalled = false;
 function installWorkspaceBridges() {
     if (_workspaceBridgesInstalled) return;
     _workspaceBridgesInstalled = true;
+
+    document.addEventListener("mindzj:workspace-trigger", (event) => {
+        const detail = (event as CustomEvent).detail;
+        if (detail?.event !== "active-leaf-change" || detail.leaf) return;
+
+        const activeFile = vaultStore.activeFile();
+        const extension =
+            activeFile?.path.split(".").pop()?.toLowerCase() ?? "";
+        if (!activeFile || !pluginExtensionMap.has(extension)) {
+            activePluginViewHandle = null;
+            for (const view of activePluginViews.values()) {
+                if (view.app?.workspace) {
+                    view.app.workspace.activeLeaf = null;
+                }
+                if (view.plugin?.app?.workspace) {
+                    view.plugin.app.workspace.activeLeaf = null;
+                }
+            }
+        }
+    });
 
     // Bridge window resize to workspace "resize" event
     window.addEventListener("resize", () => {
@@ -2144,7 +2239,11 @@ function createAppObject(pluginId: string, obsidianModule?: any) {
                         try {
                             if (event === "active-leaf-change") {
                                 // Obsidian passes the new leaf as argument
-                                cb(getMarkdownLeafCompat());
+                                cb(
+                                    e.detail?.leaf ??
+                                        getMarkdownLeafCompat() ??
+                                        this.activeLeaf,
+                                );
                             } else if (event === "file-open") {
                                 // Obsidian passes the active TFile
                                 const activeFile = vaultStore.activeFile();
@@ -2192,6 +2291,30 @@ function createAppObject(pluginId: string, obsidianModule?: any) {
                 }
             },
             getActiveViewOfType(type: any) {
+                const activeView = (this as any)._activeLeaf?.view;
+                if (activeView) {
+                    if (
+                        type === obsidianModule?.MarkdownView &&
+                        activeView.getViewType?.() === "markdown"
+                    ) {
+                        return activeView;
+                    }
+                    if (type && activeView instanceof type) {
+                        return activeView;
+                    }
+                    if (
+                        type?.prototype?.getViewType &&
+                        activeView.getViewType
+                    ) {
+                        try {
+                            const expectedType = type.prototype.getViewType();
+                            if (expectedType === activeView.getViewType()) {
+                                return activeView;
+                            }
+                        } catch {}
+                    }
+                }
+
                 const markdownLeaf = getMarkdownLeafCompat();
                 if (
                     type === obsidianModule?.MarkdownView ||
@@ -2206,20 +2329,22 @@ function createAppObject(pluginId: string, obsidianModule?: any) {
                             return markdownLeaf?.view ?? null;
                         }
                         if (expectedType) {
-                            for (const view of activePluginViews.values()) {
-                                if (
-                                    view.getViewType &&
-                                    view.getViewType() === expectedType
-                                )
-                                    return view;
-                            }
+                            const activePluginView = activePluginViewHandle
+                                ? activePluginViews.get(activePluginViewHandle)
+                                : null;
+                            return activePluginView?.getViewType?.() ===
+                                expectedType
+                                ? activePluginView
+                                : null;
                         }
                     } catch {}
                 }
-                for (const view of activePluginViews.values()) {
-                    if (type && view instanceof type) return view;
-                }
-                return null;
+                const activePluginView = activePluginViewHandle
+                    ? activePluginViews.get(activePluginViewHandle)
+                    : null;
+                return type && activePluginView instanceof type
+                    ? activePluginView
+                    : null;
             },
             getLeavesOfType(type: string) {
                 const leaves: any[] = [];
@@ -2227,7 +2352,17 @@ function createAppObject(pluginId: string, obsidianModule?: any) {
                 if (type === "markdown" && markdownLeaf) {
                     leaves.push(markdownLeaf);
                 }
+                const activePluginView = activePluginViewHandle
+                    ? activePluginViews.get(activePluginViewHandle)
+                    : null;
+                if (
+                    activePluginView?.getViewType &&
+                    activePluginView.getViewType() === type
+                ) {
+                    leaves.push(leafForPluginView(activePluginView));
+                }
                 for (const view of activePluginViews.values()) {
+                    if (view === activePluginView) continue;
                     if (view.getViewType && view.getViewType() === type) {
                         leaves.push(view.leaf || { view });
                     }
@@ -2438,6 +2573,8 @@ function createAppObject(pluginId: string, obsidianModule?: any) {
 // ---------------------------------------------------------------------------
 
 function createObsidianShim(pluginId: string) {
+    const platform = getClientPlatform();
+
     // Notice — toast notification
     class Notice {
         noticeEl: HTMLElement;
@@ -4055,9 +4192,9 @@ function createObsidianShim(pluginId: string) {
             isMobile: false,
             isMobileApp: false,
             isDesktopApp: true,
-            isWin: true,
-            isMacOS: false,
-            isLinux: false,
+            isWin: platform === "windows",
+            isMacOS: platform === "macos",
+            isLinux: platform === "linux",
         },
         requireApiVersion: (_version: string) => true,
         // Utility

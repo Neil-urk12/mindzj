@@ -186,6 +186,22 @@ export const Outline: Component = () => {
   let pluginOutlineRef: HTMLDivElement | undefined;
   let mountedOutlineView: any = null;
   let currentOutlineApp: any = null;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let retryPath: string | undefined;
+  let retryCount = 0;
+
+  const scheduleMountRetry = (path: string) => {
+    if (retryPath !== path) {
+      retryPath = path;
+      retryCount = 0;
+    }
+    if (retryTimer || retryCount >= 20) return;
+    retryCount += 1;
+    retryTimer = setTimeout(() => {
+      retryTimer = undefined;
+      mountOutline();
+    }, 50);
+  };
 
   const isPluginFile = () => {
     const file = vaultStore.activeFile();
@@ -210,6 +226,7 @@ export const Outline: Component = () => {
       if (view?.plugin?._outlineViewCreator) {
         return { plugin: view.plugin, app: view.app, view };
       }
+      return null;
     }
 
     const loadedPlugins = (window as any).__mindzj_loadedPlugins;
@@ -239,7 +256,12 @@ export const Outline: Component = () => {
     if (!file || !pluginOutlineRef) return;
 
     const info = findOutlinePlugin();
-    if (!info?.plugin?._outlineViewCreator) return;
+    if (!info?.plugin?._outlineViewCreator) {
+      if (isPluginFile()) scheduleMountRetry(file.path);
+      return;
+    }
+    retryPath = file.path;
+    retryCount = 0;
 
     const { plugin, app, view } = info;
 
@@ -340,13 +362,24 @@ export const Outline: Component = () => {
   createEffect(
     on(
       () => ({ path: vaultStore.activeFile()?.path, plugins: pluginsVersion() }),
-      () => mountOutline(),
+      ({ path }) => {
+        retryPath = path;
+        retryCount = 0;
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = undefined;
+        }
+        mountOutline();
+      },
     ),
   );
 
   onMount(() => {
     const handler = () => {
-      if (!mountedOutlineView?.refresh) return;
+      if (!mountedOutlineView?.refresh) {
+        mountOutline();
+        return;
+      }
 
       const file = vaultStore.activeFile();
       if (file && currentOutlineApp?.workspace && isPluginFile()) {
@@ -356,6 +389,9 @@ export const Outline: Component = () => {
             view,
             app: currentOutlineApp,
           };
+        } else {
+          scheduleMountRetry(file.path);
+          return;
         }
       }
 
@@ -369,6 +405,10 @@ export const Outline: Component = () => {
   });
 
   onCleanup(() => {
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = undefined;
+    }
     if (!mountedOutlineView) return;
     try {
       mountedOutlineView.onClose?.();

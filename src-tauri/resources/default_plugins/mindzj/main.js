@@ -277,8 +277,53 @@ var DEFAULT_STYLE = {
   toolbarBorderColor: "#e0e0e0",
   toolbarBorderWidth: 1
 };
+var DEFAULT_STYLE_LIGHT = {
+  ...DEFAULT_STYLE,
+  ...DEFAULT_TOOLBAR_LIGHT
+};
+var DEFAULT_STYLE_DARK = {
+  ...DEFAULT_STYLE,
+  nodeBgColor: "#2b2b2b",
+  nodeTextColor: "#ebebeb",
+  nodeBorderColor: "#cccccc",
+  rootBgColor: "#000000",
+  rootTextColor: "#e6e6e6",
+  rootBorderColor: "#c9c9c9",
+  connectionStyle: "step",
+  rainbowPalette: "Custom1",
+  customRainbows: {
+    ...DEFAULT_STYLE.customRainbows,
+    Custom1: [
+      "#11b014",
+      "#00ff00",
+      "#0000ff",
+      "#ffff00",
+      "#ff00ff",
+      "#00ffff",
+      "#888888"
+    ]
+  },
+  selectionColor: "#20df07",
+  editOutlineColor: "#3bfb2d",
+  editOutlineWidth: 2,
+  boxSelectionColor: "#a6fea4",
+  canvasBg: "#1e1e1e",
+  ...DEFAULT_TOOLBAR_DARK,
+  toolbarBorderColor: "#262626"
+};
+function getDefaultStyleForTheme(theme) {
+  return theme === "dark" ? { ...DEFAULT_STYLE_DARK } : { ...DEFAULT_STYLE_LIGHT };
+}
+function mergeThemeStyle(theme, style) {
+  return {
+    ...getDefaultStyleForTheme(theme),
+    ...(style || {})
+  };
+}
 var DEFAULT_SETTINGS = {
-  style: { ...DEFAULT_STYLE },
+  style: { ...DEFAULT_STYLE_LIGHT },
+  styleLight: { ...DEFAULT_STYLE_LIGHT },
+  styleDark: { ...DEFAULT_STYLE_DARK },
   language: "en",
   theme: "light",
   showToolbar: true,
@@ -3235,7 +3280,7 @@ var _MindMapView = class extends import_obsidian.TextFileView {
     this.commitEdit = null;
     this.undoS = [];
     this.redoS = [];
-    this.style = { ...DEFAULT_STYLE };
+    this.style = { ...DEFAULT_STYLE_LIGHT };
     this.ds = null;
     this.uiOk = false;
     this.boxSel = false;
@@ -3361,6 +3406,7 @@ var _MindMapView = class extends import_obsidian.TextFileView {
       if (this.matchKey(e, this.kb.addChild)) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         if (e.shiftKey && this.selId) {
           this.addLeftChild();
           return;
@@ -3372,6 +3418,7 @@ var _MindMapView = class extends import_obsidian.TextFileView {
       if (this.matchKey(e, this.kb.addSibling) && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         if (e.shiftKey && this.selId) {
           const sel = this.fAll(this.selId);
           if (sel == null ? void 0 : sel.isRoot) {
@@ -3954,11 +4001,6 @@ var _MindMapView = class extends import_obsidian.TextFileView {
       () => this.toggleSearch()
     );
     btn(
-      "\u{1F4D1} " + t("outline.title"),
-      t("outline.title"),
-      () => this.plugin.openOutlinePanel()
-    );
-    btn(
       t("tb.settings"),
       t("tb.tipSettings"),
       () => this.plugin.openPluginSettings()
@@ -4447,6 +4489,27 @@ var _MindMapView = class extends import_obsidian.TextFileView {
         );
       }
     };
+    const sTheme = sec("\u25D0", t("set.theme"));
+    const themeRow = sTheme.createEl("div");
+    themeRow.addClass("mz-modal-row");
+    themeRow.createEl("label", { text: t("set.theme") }).addClass("mz-modal-lbl");
+    const themeSel = themeRow.createEl("select");
+    themeSel.addClass("mz-modal-sel");
+    const lightOp = document.createElement("option");
+    lightOp.value = "light";
+    lightOp.text = t("set.light");
+    const darkOp = document.createElement("option");
+    darkOp.value = "dark";
+    darkOp.text = t("set.dark");
+    themeSel.appendChild(lightOp);
+    themeSel.appendChild(darkOp);
+    themeSel.value = this.plugin.settings.theme;
+    themeSel.addEventListener("change", () => {
+      void this.plugin.switchTheme(themeSel.value).then(() => {
+        close();
+        this.showStyleModal();
+      });
+    });
     const s1 = sec("\u{1F4E6}", t("sm.child"));
     R(s1, t("sm.bg"), "nodeBgColor", "color");
     R(s1, t("sm.text"), "nodeTextColor", "color");
@@ -4743,7 +4806,7 @@ var _MindMapView = class extends import_obsidian.TextFileView {
     br.createEl("button", { text: t("sm.reset") }).addEventListener(
       "click",
       () => {
-        this.applyStyle({ ...DEFAULT_STYLE });
+        this.applyStyle({ ...getDefaultStyleForTheme(this.plugin.settings.theme) });
         close();
         this.showStyleModal();
       }
@@ -6891,6 +6954,24 @@ var StylePanelView = class extends import_obsidian2.ItemView {
         () => upd({ [k]: sel.value })
       );
     };
+    const sTheme = mkSec("\u25D0", t("set.theme"));
+    const themeRow = mkRow(sTheme, t("set.theme"));
+    const themeSel = themeRow.createEl("select");
+    themeSel.addClass("mz-sp-sel");
+    for (const [value, label] of [
+      ["light", t("set.light")],
+      ["dark", t("set.dark")]
+    ]) {
+      const op = document.createElement("option");
+      op.value = value;
+      op.text = label;
+      if (value === this.plugin.settings.theme)
+        op.selected = true;
+      themeSel.appendChild(op);
+    }
+    themeSel.addEventListener("change", () => {
+      void this.plugin.switchTheme(themeSel.value).then(() => this.build());
+    });
     const s1 = mkSec("\u{1F4E6}", t("sm.child"));
     mkColor(s1, t("sm.bg"), "nodeBgColor");
     mkColor(s1, t("sm.text"), "nodeTextColor");
@@ -7014,9 +7095,9 @@ var StylePanelView = class extends import_obsidian2.ItemView {
       () => {
         const v = this.getView();
         if (v)
-          v.applyStyle({ ...DEFAULT_STYLE });
+          v.applyStyle({ ...getDefaultStyleForTheme(this.plugin.settings.theme) });
         else
-          void this.plugin.updateStyle({ ...DEFAULT_STYLE });
+          void this.plugin.updateStyle({ ...getDefaultStyleForTheme(this.plugin.settings.theme) });
         this.build();
       }
     );
@@ -7326,8 +7407,7 @@ var MindMapSettingTab = class extends import_obsidian4.PluginSettingTab {
       const cur = this.plugin.settings.style.canvasBg;
       cp.setValue(cur.startsWith("#") ? cur : "#ffffff");
       cp.onChange(async (v) => {
-        this.plugin.settings.style.canvasBg = v;
-        await this.plugin.saveSettings();
+        await this.plugin.updateStyle({ canvasBg: v });
         this.plugin.applyStyleToAllViews(
           this.plugin.settings.style
         );
@@ -7541,7 +7621,9 @@ var MindNodePlugin = class extends import_obsidian5.Plugin {
     super(...arguments);
     this.settings = {
       ...DEFAULT_SETTINGS,
-      style: { ...DEFAULT_STYLE },
+      style: { ...DEFAULT_STYLE_LIGHT },
+      styleLight: { ...DEFAULT_STYLE_LIGHT },
+      styleDark: { ...DEFAULT_STYLE_DARK },
       keyBindings: { ...DEFAULT_KEYBINDINGS }
     };
   }
@@ -7645,24 +7727,41 @@ var MindNodePlugin = class extends import_obsidian5.Plugin {
   onunload() {
   }
   async loadSettings() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+    var _a, _b, _c, _d, _e, _f, _g;
     const d = await this.loadData();
     if (d) {
+      const theme = d.theme === "dark" ? "dark" : "light";
+      const legacyStyle = (_a = d.style) != null ? _a : {};
+      const styleLight = mergeThemeStyle(
+        "light",
+        (_b = d.styleLight) != null ? _b : theme === "light" ? legacyStyle : {}
+      );
+      const styleDark = mergeThemeStyle(
+        "dark",
+        (_c = d.styleDark) != null ? _c : theme === "dark" ? legacyStyle : {}
+      );
+      if (d.toolbarStyleLight)
+        Object.assign(styleLight, d.toolbarStyleLight);
+      if (d.toolbarStyleDark)
+        Object.assign(styleDark, d.toolbarStyleDark);
+      const style = theme === "dark" ? { ...styleDark } : { ...styleLight };
       this.settings = {
-        style: { ...DEFAULT_STYLE, ...(_a = d.style) != null ? _a : {} },
-        language: (_b = d.language) != null ? _b : "en",
-        theme: (_c = d.theme) != null ? _c : "light",
-        showToolbar: (_d = d.showToolbar) != null ? _d : true,
+        style,
+        styleLight,
+        styleDark,
+        language: (_d = d.language) != null ? _d : "en",
+        theme,
+        showToolbar: (_e = d.showToolbar) != null ? _e : true,
         keyBindings: {
           ...DEFAULT_KEYBINDINGS,
-          ...(_e = d.keyBindings) != null ? _e : {}
+          ...(_f = d.keyBindings) != null ? _f : {}
         },
-        developerMode: (_f = d.developerMode) != null ? _f : false,
-        editOnCreate: (_g = d.editOnCreate) != null ? _g : true,
-        typeToEdit: (_h = d.typeToEdit) != null ? _h : true,
-        customNodeNames: (_i = d.customNodeNames) != null ? _i : {},
-        toolbarStyleLight: d.toolbarStyleLight,
-        toolbarStyleDark: d.toolbarStyleDark
+        developerMode: (_g = d.developerMode) != null ? _g : false,
+        editOnCreate: d.editOnCreate != null ? d.editOnCreate : true,
+        typeToEdit: d.typeToEdit != null ? d.typeToEdit : true,
+        customNodeNames: d.customNodeNames != null ? d.customNodeNames : {},
+        toolbarStyleLight: d.toolbarStyleLight || this.getToolbarColorsFromStyle(styleLight),
+        toolbarStyleDark: d.toolbarStyleDark || this.getToolbarColorsFromStyle(styleDark)
       };
       const valid = [
         "bezier",
@@ -7672,10 +7771,13 @@ var MindNodePlugin = class extends import_obsidian5.Plugin {
         "bracket",
         "loose"
       ];
-      if (!valid.includes(this.settings.style.connectionStyle))
-        this.settings.style.connectionStyle = "bezier";
-      if (this.settings.theme === "dark" && !d.toolbarStyleDark) {
-        this.applyToolbarColors(DEFAULT_TOOLBAR_DARK);
+      for (const s of [
+        this.settings.style,
+        this.settings.styleLight,
+        this.settings.styleDark
+      ]) {
+        if (!valid.includes(s.connectionStyle))
+          s.connectionStyle = "bezier";
       }
     }
   }
@@ -7684,13 +7786,21 @@ var MindNodePlugin = class extends import_obsidian5.Plugin {
   }
   async updateStyle(p) {
     this.settings.style = { ...this.settings.style, ...p };
+    const key = this.settings.theme === "dark" ? "styleDark" : "styleLight";
+    this.settings[key] = mergeThemeStyle(this.settings.theme, {
+      ...this.settings[key],
+      ...this.settings.style
+    });
+    if (this.settings.theme === "dark")
+      this.settings.toolbarStyleDark = this.getToolbarColors();
+    else
+      this.settings.toolbarStyleLight = this.getToolbarColors();
     await this.saveSettings();
   }
   getStyle() {
     return { ...this.settings.style };
   }
-  getToolbarColors() {
-    const s = this.settings.style;
+  getToolbarColorsFromStyle(s) {
     return {
       toolbarBgColor: s.toolbarBgColor,
       toolbarBtnBgColor: s.toolbarBtnBgColor,
@@ -7701,19 +7811,26 @@ var MindNodePlugin = class extends import_obsidian5.Plugin {
       toolbarBorderWidth: s.toolbarBorderWidth
     };
   }
+  getToolbarColors() {
+    return this.getToolbarColorsFromStyle(this.settings.style);
+  }
   applyToolbarColors(tc) {
     Object.assign(this.settings.style, tc);
   }
   async switchTheme(newTheme) {
-    var _a, _b;
-    if (this.settings.theme === "light")
+    if (newTheme !== "light" && newTheme !== "dark")
+      return;
+    if (this.settings.theme === "light") {
+      this.settings.styleLight = mergeThemeStyle("light", this.settings.style);
       this.settings.toolbarStyleLight = this.getToolbarColors();
-    else
+    } else {
+      this.settings.styleDark = mergeThemeStyle("dark", this.settings.style);
       this.settings.toolbarStyleDark = this.getToolbarColors();
+    }
     this.settings.theme = newTheme;
-    this.settings.style.canvasBg = newTheme === "dark" ? "#1e1e1e" : "#ffffff";
-    this.applyToolbarColors(
-      newTheme === "light" ? (_a = this.settings.toolbarStyleLight) != null ? _a : DEFAULT_TOOLBAR_LIGHT : (_b = this.settings.toolbarStyleDark) != null ? _b : DEFAULT_TOOLBAR_DARK
+    this.settings.style = mergeThemeStyle(
+      newTheme,
+      newTheme === "dark" ? this.settings.styleDark : this.settings.styleLight
     );
     await this.saveSettings();
     this.applyStyleToAllViews(this.settings.style);
