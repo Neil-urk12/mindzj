@@ -750,6 +750,13 @@ async fn open_image_in_new_window(
 /// It registers all Tauri commands, plugins, and initializes the application state.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    {
+        // WebKitGTK can otherwise draw GTK overlay scrollbars on top of
+        // the app's own thin WebKit scrollbars.
+        std::env::set_var("GTK_OVERLAY_SCROLLING", "0");
+    }
+
     // Initialize logging.
     //
     // Windows release builds are GUI-subsystem apps with no stdout, so

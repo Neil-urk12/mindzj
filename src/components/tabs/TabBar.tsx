@@ -130,7 +130,7 @@ interface TabBarProps {
 interface ContextMenuItem {
   label: string;
   shortcut?: string;
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
   danger?: boolean;
   selected?: boolean;
   separator?: never;
@@ -640,8 +640,11 @@ export const TabBar: Component<TabBarProps> = (props) => {
                   >
                     <button
                       onClick={() => {
-                        (entry as ContextMenuItem).onClick();
+                        const action = (entry as ContextMenuItem).onClick;
                         closeContextMenu();
+                        void Promise.resolve(action()).catch((error) => {
+                          console.warn("[TabBar] Context menu action failed:", error);
+                        });
                       }}
                       style={{
                         display: "flex",

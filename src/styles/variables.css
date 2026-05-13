@@ -263,12 +263,6 @@ body {
   opacity: 1;
 }
 
-html[data-mz-platform="macos"] *,
-html[data-mz-platform="linux"] * {
-  scrollbar-width: thin;
-  scrollbar-color: var(--mz-scrollbar-thumb) transparent;
-}
-
 /* Allow text selection inside plugin views and editors */
 .cm-editor, .mz-svg-ct, .mz-node-ta, .mz-md-ta, .view-content textarea, .view-content input {
   user-select: text;

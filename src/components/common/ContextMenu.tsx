@@ -13,7 +13,7 @@ import { t } from "../../i18n";
 export interface MenuItem {
   label: string;
   icon?: string;
-  action: () => void;
+  action: () => void | Promise<void>;
   danger?: boolean;
   separator?: boolean;
 }
@@ -135,8 +135,11 @@ export const ContextMenu: Component<ContextMenuProps> = (props) => {
               </Show>
               <button
                 onClick={() => {
+                  const action = item.action;
                   props.onClose();
-                  item.action();
+                  void Promise.resolve(action()).catch((error) => {
+                    console.warn("[ContextMenu] Menu action failed:", error);
+                  });
                 }}
                 style={{
                   display: "flex",

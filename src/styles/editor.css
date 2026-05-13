@@ -576,6 +576,11 @@ html[data-mz-platform="linux"] .mz-pane-wrap-secondary .mz-file-preview-scroll::
     background: var(--mz-border-strong) !important;
 }
 
+html[data-mz-platform="macos"] .mz-sidebar-file-list-scroll,
+html[data-mz-platform="linux"] .mz-sidebar-file-list-scroll {
+    scrollbar-gutter: stable;
+}
+
 /* Pane wrapper + inner editor/reading container flush against the
    split divider. Zero padding/margin guarantees the scrollbar's right
    edge touches the divider line — the "scrollbar should hug the

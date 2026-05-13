@@ -5,6 +5,7 @@ import {
     createSignal,
     createEffect,
     createMemo,
+    batch,
     on,
     onMount,
     onCleanup,
@@ -951,6 +952,29 @@ const App: Component = () => {
         setSecondaryPanePath(path);
     }
 
+    let splitOpenOperationId = 0;
+    let suppressActiveFilePaneSyncDepth = 0;
+
+    function commitPaneLayout(
+        primary: string | null,
+        secondary: string | null,
+        activeSlot: PaneSlot,
+        direction?: SplitDirection,
+    ) {
+        batch(() => {
+            if (direction) setSplitDirection(direction);
+            setPrimaryPanePath(primary);
+            setSecondaryPanePath(secondary);
+            setActivePaneSlot(activeSlot);
+
+            const activePath = activeSlot === "secondary" ? secondary : primary;
+            const activeFile = findOpenFile(activePath);
+            if (activeFile) {
+                vaultStore.setActiveFile(activeFile);
+            }
+        });
+    }
+
     function isSplitDirection(value: unknown): value is SplitDirection {
         return (
             value === "left" ||
@@ -1164,6 +1188,7 @@ const App: Component = () => {
         path: string,
         direction: SplitDirection,
     ) {
+        const operationId = ++splitOpenOperationId;
         // Cooperatively cancel any in-flight sidebar global search
         // BEFORE we start the split. Spinning up a new Editor
         // (secondary pane) while the search loop is still hammering
@@ -1226,16 +1251,23 @@ const App: Component = () => {
         const currentDirection = splitDirection();
 
         if (!findOpenFile(path)) {
-            await openFileRouted(path);
+            suppressActiveFilePaneSyncDepth++;
+            try {
+                await openFileRouted(path);
+            } finally {
+                suppressActiveFilePaneSyncDepth = Math.max(
+                    0,
+                    suppressActiveFilePaneSyncDepth - 1,
+                );
+            }
+            if (operationId !== splitOpenOperationId) return;
             if (!findOpenFile(path)) return;
         }
 
         // With no previous active path this is the very first tab the
         // user is opening — just drop it into primary, no split.
         if (!previousActivePath) {
-            setPrimaryPanePath(path);
-            setSecondaryPanePath(null);
-            activatePane("primary");
+            commitPaneLayout(path, null, "primary");
             return;
         }
 
@@ -1246,18 +1278,13 @@ const App: Component = () => {
 
         // ── Case 1: no existing split yet ────────────────────────────
         if (!wasSplit) {
-            setSplitDirection(direction);
             if (direction === "left" || direction === "up") {
                 // `path` becomes the primary (left/top); previously
                 // active file slides into the secondary slot.
-                setSecondaryPanePath(previousActivePath);
-                setPrimaryPanePath(path);
-                activatePane("primary");
+                commitPaneLayout(path, previousActivePath, "primary", direction);
             } else {
                 // right/down: `path` becomes secondary.
-                setPrimaryPanePath(previousActivePath);
-                setSecondaryPanePath(path);
-                activatePane("secondary");
+                commitPaneLayout(previousActivePath, path, "secondary", direction);
             }
             return;
         }
@@ -1272,13 +1299,9 @@ const App: Component = () => {
         // clobber of the active slot gets undone.
         if (newAxisHorizontal === oldAxisHorizontal) {
             if (direction === "right" || direction === "down") {
-                setPrimaryPanePath(previousPrimary);
-                setSecondaryPanePath(path);
-                activatePane("secondary");
+                commitPaneLayout(previousPrimary, path, "secondary");
             } else {
-                setSecondaryPanePath(previousSecondary);
-                setPrimaryPanePath(path);
-                activatePane("primary");
+                commitPaneLayout(path, previousSecondary, "primary");
             }
             return;
         }
@@ -1289,15 +1312,10 @@ const App: Component = () => {
         // (still open in the tab strip, just no longer assigned to a
         // pane). The new file (`path`) takes the slot dictated by
         // `direction`.
-        setSplitDirection(direction);
         if (direction === "left" || direction === "up") {
-            setPrimaryPanePath(path);
-            setSecondaryPanePath(previousActivePath);
-            activatePane("primary");
+            commitPaneLayout(path, previousActivePath, "primary", direction);
         } else {
-            setPrimaryPanePath(previousActivePath);
-            setSecondaryPanePath(path);
-            activatePane("secondary");
+            commitPaneLayout(previousActivePath, path, "secondary", direction);
         }
     }
 
@@ -1305,6 +1323,7 @@ const App: Component = () => {
         on(
             () => vaultStore.activeFile()?.path ?? null,
             (path) => {
+                if (suppressActiveFilePaneSyncDepth > 0) return;
                 if (!path) return;
                 if (getPanePath(activePaneSlot()) !== path) {
                     setPanePath(activePaneSlot(), path);
