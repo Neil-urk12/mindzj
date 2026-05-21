@@ -5,6 +5,7 @@
   "author": "SuperJohn",
   "license": "AGPL-3.0-or-later",
   "type": "module",
+  "packageManager": "pnpm@10.33.3",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -26,6 +27,7 @@
     "@codemirror/search": "6.6.0",
     "@codemirror/state": "6.6.0",
     "@codemirror/view": "6.40.0",
+    "@lezer/highlight": "^1.2.3",
     "@lezer/markdown": "1.6.3",
     "@tauri-apps/api": "2.10.1",
     "@tauri-apps/plugin-clipboard-manager": "2.3.2",
