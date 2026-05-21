@@ -1,8 +1,57 @@
 use serde::Serialize;
+use thiserror::Error;
 
-// Re-export KernelError from the shared kernel crate
-pub use mindzj_kernel::KernelError;
-pub use mindzj_kernel::KernelResult;
+/// Central error type for all kernel operations.
+/// Each variant maps to a specific failure domain, making error handling
+/// precise and debuggable across the entire backend.
+#[derive(Error, Debug)]
+#[allow(dead_code)]
+pub enum KernelError {
+    #[error("Vault not found: {0}")]
+    VaultNotFound(String),
+
+    #[error("Vault already open: {0}")]
+    VaultAlreadyOpen(String),
+
+    #[error("File not found: {0}")]
+    FileNotFound(String),
+
+    #[error("File already exists: {0}")]
+    FileAlreadyExists(String),
+
+    #[error("Path traversal denied: {0}")]
+    PathTraversalDenied(String),
+
+    #[error("Invalid file name: {0}")]
+    InvalidFileName(String),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Database error: {0}")]
+    Database(String),
+
+    #[error("Index error: {0}")]
+    Index(String),
+
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
+
+    #[error("Authentication failed: {0}")]
+    AuthFailed(String),
+
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
+
+    #[error("Plugin error: {0}")]
+    Plugin(String),
+
+    #[error("AI provider error: {0}")]
+    AiProvider(String),
+
+    #[error("Configuration error: {0}")]
+    Config(String),
+}
 
 /// Serializable error wrapper for Tauri command responses.
 /// Tauri requires command errors to implement `Serialize` so they
@@ -32,27 +81,8 @@ impl From<KernelError> for CommandError {
             KernelError::AiProvider(_) => "AI_PROVIDER_ERROR",
             KernelError::Config(_) => "CONFIG_ERROR",
         };
-
         CommandError {
-            code: code.into(),
-            message: err.to_string(),
-        }
-    }
-}
-
-impl From<serde_json::Error> for CommandError {
-    fn from(err: serde_json::Error) -> Self {
-        CommandError {
-            code: "SERIALIZATION_ERROR".into(),
-            message: err.to_string(),
-        }
-    }
-}
-
-impl From<std::io::Error> for CommandError {
-    fn from(err: std::io::Error) -> Self {
-        CommandError {
-            code: "IO_ERROR".into(),
+            code: code.to_string(),
             message: err.to_string(),
         }
     }
@@ -63,3 +93,5 @@ impl std::fmt::Display for CommandError {
         write!(f, "[{}] {}", self.code, self.message)
     }
 }
+
+pub type KernelResult<T> = Result<T, KernelError>;

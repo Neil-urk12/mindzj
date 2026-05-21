@@ -317,7 +317,7 @@ pub async fn open_vault(
     name: String,
 ) -> Result<VaultInfo, CommandError> {
     let path_buf = std::path::PathBuf::from(&path);
-    let (info, ctx) = state
+    let (info, _ctx) = state
         .open_vault(path_buf.clone(), &name, window.label())
         .map_err(CommandError::from)?;
 
@@ -338,17 +338,20 @@ pub async fn open_vault(
 
     // Start file watcher for this vault (if not already running)
     {
-        let mut watcher_guard = ctx.watcher.lock().map_err(|_| CommandError {
-            code: "LOCK_ERROR".into(),
-            message: "Failed to acquire watcher lock".into(),
-        })?;
-        if watcher_guard.is_none() {
-            match VaultWatcher::new(path_buf, app) {
-                Ok(w) => {
-                    *watcher_guard = Some(w);
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to start file watcher: {}", e);
+        let vault_key = info.path.to_string_lossy().to_string();
+        if let Some(watcher_handle) = state.get_watcher(&vault_key) {
+            let mut watcher_guard = watcher_handle.lock().map_err(|_| CommandError {
+                code: "LOCK_ERROR".into(),
+                message: "Failed to acquire watcher lock".into(),
+            })?;
+            if watcher_guard.is_none() {
+                match VaultWatcher::new(path_buf, app) {
+                    Ok(w) => {
+                        *watcher_guard = Some(w);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to start file watcher: {}", e);
+                    }
                 }
             }
         }

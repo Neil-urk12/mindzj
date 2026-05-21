@@ -1,5 +1,5 @@
 [workspace]
-members = ["src-tauri", "cli"]
+members = ["src-tauri", "cli", "crates/mindzj-kernel"]
 resolver = "2"
 
 [profile.dev]
