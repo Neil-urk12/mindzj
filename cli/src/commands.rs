@@ -1,11 +1,14 @@
 use crate::OutputFormat;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use colored::Colorize;
+use mindzj_kernel::types::SearchQuery;
+use mindzj_kernel::vault::Vault;
+use mindzj_kernel::{open_vault_context, VaultContext};
 use serde_json::json;
-use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
 // Vault commands
@@ -24,11 +27,11 @@ pub fn vault_info(vault_path: &Path, format: OutputFormat) -> Result<()> {
         std::process::exit(1);
     }
 
-    let mut md_count = 0u32;
-    let mut total_size = 0u64;
-    count_files_recursive(vault_path, &mut md_count, &mut total_size)?;
-
-    let name = vault_path
+    let vault = Vault::open(vault_path, "cli-vault")?;
+    let entries = vault.file_tree(10)?;
+    let (md_count, total_size) = count_entries(&entries);
+    let name = vault
+        .root()
         .file_name()
         .unwrap_or_default()
         .to_string_lossy()
@@ -72,39 +75,8 @@ pub fn vault_list(format: OutputFormat) -> Result<()> {
 pub fn vault_open(path: &Path, format: OutputFormat) -> Result<()> {
     let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
-    if !path.exists() {
-        fs::create_dir_all(&path)?;
-        println!("Created directory: {}", path.display());
-    }
-
-    let config_dir = path.join(".mindzj");
-    if !config_dir.exists() {
-        fs::create_dir_all(&config_dir)?;
-    }
-
-    for subdir in ["snapshots", "plugins", "snippets", "themes", "images"] {
-        fs::create_dir_all(config_dir.join(subdir))?;
-    }
-
-    for (name, default_content) in [
-        ("app.json", "{}"),
-        ("appearance.json", "{}"),
-        ("hotkeys.json", "[]"),
-        (
-            "workspace.json",
-            r#"{"open_files":[],"active_file":null,"sidebar_tab":"files","sidebar_collapsed":false,"sidebar_width":260,"sidebar_tab_order":["files","outline","search","calendar"]}"#,
-        ),
-        ("plugins.json", "[]"),
-        ("graph.json", "{}"),
-        ("backlink.json", "{}"),
-        ("types.json", "{}"),
-        ("settings.json", r#"{"attachment_folder":".mindzj/images"}"#),
-    ] {
-        let file_path = config_dir.join(name);
-        if !file_path.exists() {
-            fs::write(file_path, default_content)?;
-        }
-    }
+    // Vault::open handles creating the directory structure
+    let _vault = Vault::open(&path, "cli-vault")?;
 
     if matches!(format, OutputFormat::Json) {
         emit_json(&json!({
@@ -135,27 +107,14 @@ pub fn note_create(
     folder: Option<&str>,
     format: OutputFormat,
 ) -> Result<()> {
-    ensure_vault(vault_path)?;
+    let ctx = open_vault_or_exit(vault_path);
 
     let file_name = normalize_note_name(name);
-    let file_path = if let Some(dir) = folder {
-        let dir_path = vault_path.join(dir);
-        if !dir_path.exists() {
-            fs::create_dir_all(&dir_path)?;
-        }
-        dir_path.join(&file_name)
+    let relative_path = if let Some(dir) = folder {
+        format!("{}/{}", dir, file_name)
     } else {
-        vault_path.join(&file_name)
+        file_name.clone()
     };
-
-    if file_path.exists() {
-        eprintln!(
-            "{} File '{}' already exists.",
-            "Error:".red(),
-            file_path.display()
-        );
-        std::process::exit(1);
-    }
 
     let input = read_content_input(content, read_stdin)?;
     let default_content = if input.is_empty() {
@@ -164,13 +123,19 @@ pub fn note_create(
         input
     };
 
-    atomic_write_string(&file_path, &default_content)?;
+    let fc = ctx
+        .vault
+        .create_file(&relative_path, &default_content)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Update indexes
+    ctx.on_file_changed(&relative_path, &default_content);
 
     if matches!(format, OutputFormat::Json) {
         emit_json(&json!({
             "created": true,
-            "path": relative_display_path(vault_path, &file_path),
-            "bytes": default_content.len()
+            "path": fc.path,
+            "bytes": fc.content.len()
         }))?;
         return Ok(());
     }
@@ -178,7 +143,7 @@ pub fn note_create(
     println!(
         "{} Created note: {}",
         "OK".green(),
-        relative_display_path(vault_path, &file_path).cyan()
+        fc.path.cyan()
     );
 
     Ok(())
@@ -192,30 +157,36 @@ pub fn note_write(
     create: bool,
     format: OutputFormat,
 ) -> Result<()> {
-    ensure_vault(vault_path)?;
+    let ctx = open_vault_or_exit(vault_path);
 
-    let file_path = if create {
-        match try_resolve_note_path(vault_path, name)? {
-            Some(path) => path,
-            None => resolve_note_destination(vault_path, name),
-        }
-    } else {
-        resolve_note_path(vault_path, name)?
-    };
-    let existed_before = file_path.exists();
+    let relative_path = resolve_note_path_from_vault(&ctx, name);
+    let existed_before = ctx.vault.read_file(&relative_path).is_ok();
 
-    if let Some(parent) = file_path.parent() {
-        fs::create_dir_all(parent)?;
+    if !existed_before && !create {
+        eprintln!("{} Note '{}' not found.", "Error:".red(), name);
+        std::process::exit(1);
     }
 
     let next_content = read_required_content(content, read_stdin, "write")?;
-    atomic_write_string(&file_path, &next_content)?;
+
+    let fc = if existed_before {
+        ctx.vault
+            .write_file(&relative_path, &next_content)
+            .map_err(|e| anyhow::anyhow!("{}", e))?
+    } else {
+        ctx.vault
+            .create_file(&relative_path, &next_content)
+            .map_err(|e| anyhow::anyhow!("{}", e))?
+    };
+
+    // Update indexes
+    ctx.on_file_changed(&relative_path, &next_content);
 
     if matches!(format, OutputFormat::Json) {
         emit_json(&json!({
             "written": true,
-            "path": relative_display_path(vault_path, &file_path),
-            "bytes": next_content.len(),
+            "path": fc.path,
+            "bytes": fc.content.len(),
             "created": create && !existed_before
         }))?;
         return Ok(());
@@ -224,7 +195,7 @@ pub fn note_write(
     println!(
         "{} Wrote note: {}",
         "OK".green(),
-        relative_display_path(vault_path, &file_path).cyan()
+        fc.path.cyan()
     );
 
     Ok(())
@@ -237,24 +208,34 @@ pub fn note_append(
     read_stdin: bool,
     format: OutputFormat,
 ) -> Result<()> {
-    ensure_vault(vault_path)?;
+    let ctx = open_vault_or_exit(vault_path);
 
-    let file_path = resolve_note_path(vault_path, name)?;
-    let mut current = fs::read_to_string(&file_path)
-        .with_context(|| format!("Failed to read '{}'", file_path.display()))?;
+    let relative_path = resolve_note_path_from_vault(&ctx, name);
+    let fc = ctx
+        .vault
+        .read_file(&relative_path)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
     let appended = read_required_content(content, read_stdin, "append")?;
+    let mut current = fc.content;
 
     if !current.is_empty() && !current.ends_with('\n') {
         current.push('\n');
     }
     current.push_str(&appended);
 
-    atomic_write_string(&file_path, &current)?;
+    let updated = ctx
+        .vault
+        .write_file(&relative_path, &current)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Update indexes
+    ctx.on_file_changed(&relative_path, &current);
 
     if matches!(format, OutputFormat::Json) {
         emit_json(&json!({
             "appended": true,
-            "path": relative_display_path(vault_path, &file_path),
+            "path": updated.path,
             "appended_bytes": appended.len(),
             "bytes": current.len()
         }))?;
@@ -264,7 +245,7 @@ pub fn note_append(
     println!(
         "{} Appended to note: {}",
         "OK".green(),
-        relative_display_path(vault_path, &file_path).cyan()
+        updated.path.cyan()
     );
 
     Ok(())
@@ -276,37 +257,26 @@ pub fn note_move(
     to: &str,
     format: OutputFormat,
 ) -> Result<()> {
-    ensure_vault(vault_path)?;
+    let ctx = open_vault_or_exit(vault_path);
 
-    let from_path = resolve_note_path(vault_path, from)?;
-    let to_path = resolve_note_destination(vault_path, to);
+    let from_path = resolve_note_path_from_vault(&ctx, from);
+    let to_path = resolve_note_destination(to);
 
-    if to_path.exists() {
-        eprintln!(
-            "{} Destination '{}' already exists.",
-            "Error:".red(),
-            to_path.display()
-        );
-        std::process::exit(1);
+    ctx.vault
+        .rename_file(&from_path, &to_path)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Update indexes - remove old, re-index content under new path
+    ctx.on_file_deleted(&from_path);
+    if let Ok(fc) = ctx.vault.read_file(&to_path) {
+        ctx.on_file_changed(&to_path, &fc.content);
     }
-
-    if let Some(parent) = to_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    fs::rename(&from_path, &to_path).with_context(|| {
-        format!(
-            "Failed to move '{}' to '{}'",
-            from_path.display(),
-            to_path.display()
-        )
-    })?;
 
     if matches!(format, OutputFormat::Json) {
         emit_json(&json!({
             "moved": true,
-            "from": relative_display_path(vault_path, &from_path),
-            "to": relative_display_path(vault_path, &to_path)
+            "from": from_path,
+            "to": to_path
         }))?;
         return Ok(());
     }
@@ -314,29 +284,31 @@ pub fn note_move(
     println!(
         "{} Moved note: {} -> {}",
         "OK".green(),
-        relative_display_path(vault_path, &from_path).cyan(),
-        relative_display_path(vault_path, &to_path).cyan()
+        from_path.cyan(),
+        to_path.cyan()
     );
 
     Ok(())
 }
 
 pub fn note_read(vault_path: &Path, name: &str, format: OutputFormat) -> Result<()> {
-    ensure_vault(vault_path)?;
+    let ctx = open_vault_or_exit(vault_path);
 
-    let file_path = resolve_note_path(vault_path, name)?;
-    let content = fs::read_to_string(&file_path)
-        .with_context(|| format!("Failed to read '{}'", file_path.display()))?;
+    let relative_path = resolve_note_path_from_vault(&ctx, name);
+    let fc = ctx
+        .vault
+        .read_file(&relative_path)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     if matches!(format, OutputFormat::Json) {
         emit_json(&json!({
-            "path": relative_display_path(vault_path, &file_path),
-            "content": content
+            "path": fc.path,
+            "content": fc.content
         }))?;
         return Ok(());
     }
 
-    print!("{}", content);
+    print!("{}", fc.content);
     Ok(())
 }
 
@@ -346,53 +318,51 @@ pub fn note_list(
     dir_filter: Option<&str>,
     format: OutputFormat,
 ) -> Result<()> {
-    ensure_vault(vault_path)?;
+    let ctx = open_vault_or_exit(vault_path);
 
-    let base = if let Some(dir) = dir_filter {
-        vault_path.join(dir)
-    } else {
-        vault_path.to_path_buf()
-    };
+    let entries = ctx
+        .vault
+        .file_tree(10)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-    if !base.exists() {
-        eprintln!(
-            "{} Directory '{}' not found.",
-            "Error:".red(),
-            base.display()
-        );
-        std::process::exit(1);
+    let mut notes: Vec<String> = Vec::new();
+    collect_note_paths(&entries, &mut notes);
+
+    // Apply directory filter
+    if let Some(dir) = dir_filter {
+        notes.retain(|p| p.starts_with(dir));
     }
 
-    let mut notes = Vec::new();
-    collect_notes_recursive(&base, vault_path, &mut notes)?;
-
+    // Apply tag filter (grep-based, same as original)
     if let Some(tag) = tag_filter {
-        notes.retain(|(_, content)| content.contains(&format!("#{}", tag)));
+        let tag_pattern = format!("#{}", tag);
+        notes.retain(|p| {
+            if let Ok(fc) = ctx.vault.read_file(p) {
+                fc.content.contains(&tag_pattern)
+            } else {
+                false
+            }
+        });
     }
-
-    let paths: Vec<String> = notes
-        .iter()
-        .map(|(path, _)| relative_display_path(vault_path, path))
-        .collect();
 
     if matches!(format, OutputFormat::Json) {
         emit_json(&json!({
-            "count": paths.len(),
-            "notes": paths
+            "count": notes.len(),
+            "notes": notes
         }))?;
         return Ok(());
     }
 
-    if paths.is_empty() {
+    if notes.is_empty() {
         println!("No notes found.");
         return Ok(());
     }
 
-    for path in &paths {
+    for path in &notes {
         println!("{}", path);
     }
 
-    println!("\n{} notes total", paths.len().to_string().cyan());
+    println!("\n{} notes total", notes.len().to_string().cyan());
     Ok(())
 }
 
@@ -402,39 +372,30 @@ pub fn note_search(
     limit: usize,
     format: OutputFormat,
 ) -> Result<()> {
-    ensure_vault(vault_path)?;
+    let ctx = open_vault_or_exit(vault_path);
 
-    let query_lower = query.to_lowercase();
-    let mut results: Vec<(PathBuf, Vec<(usize, String)>)> = Vec::new();
+    let search_query = SearchQuery {
+        text: query.to_string(),
+        limit,
+        extension_filter: Some(".md".to_string()),
+        path_filter: None,
+    };
 
-    let mut all_notes = Vec::new();
-    collect_notes_recursive(vault_path, vault_path, &mut all_notes)?;
-
-    for (path, content) in &all_notes {
-        let mut matches = Vec::new();
-
-        for (line_num, line) in content.lines().enumerate() {
-            if line.to_lowercase().contains(&query_lower) {
-                matches.push((line_num + 1, line.to_string()));
-            }
-        }
-
-        if !matches.is_empty() {
-            results.push((path.clone(), matches));
-        }
-    }
-
-    results.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
-    results.truncate(limit);
+    let results = ctx
+        .search_index
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Search index lock poisoned: {}", e))?
+        .search(&search_query)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     if matches!(format, OutputFormat::Json) {
         let payload: Vec<_> = results
             .iter()
-            .map(|(path, matches)| {
+            .map(|r| {
                 json!({
-                    "path": relative_display_path(vault_path, path),
-                    "matches": matches.iter().map(|(line, text)| {
-                        json!({ "line": line, "text": text })
+                    "path": r.path,
+                    "matches": r.snippets.iter().map(|s| {
+                        json!({ "line": s.line, "text": s.text })
                     }).collect::<Vec<_>>()
                 })
             })
@@ -452,18 +413,21 @@ pub fn note_search(
         return Ok(());
     }
 
-    for (path, matches) in &results {
-        let relative = relative_display_path(vault_path, path);
-        println!("{}", relative.cyan().bold());
+    for result in &results {
+        println!("{}", result.path.cyan().bold());
 
-        for (line_num, line) in matches.iter().take(3) {
-            let trimmed = line.trim();
-            let display = trimmed.replace(query, &format!("{}", query.yellow().bold()));
-            println!("  L:{} {}", line_num, display);
+        for snippet in result.snippets.iter().take(3) {
+            let display = snippet
+                .text
+                .replace(query, &format!("{}", query.yellow().bold()));
+            println!("  L:{} {}", snippet.line + 1, display);
         }
 
-        if matches.len() > 3 {
-            println!("  {} more matches...", (matches.len() - 3).to_string().dimmed());
+        if result.snippets.len() > 3 {
+            println!(
+                "  {} more matches...",
+                (result.snippets.len() - 3).to_string().dimmed()
+            );
         }
 
         println!();
@@ -479,15 +443,12 @@ pub fn note_delete(
     force: bool,
     format: OutputFormat,
 ) -> Result<()> {
-    ensure_vault(vault_path)?;
+    let ctx = open_vault_or_exit(vault_path);
 
-    let file_path = resolve_note_path(vault_path, name)?;
+    let relative_path = resolve_note_path_from_vault(&ctx, name);
 
     if !force {
-        eprint!(
-            "Delete '{}'? This cannot be undone. [y/N] ",
-            relative_display_path(vault_path, &file_path)
-        );
+        eprint!("Delete '{}'? This cannot be undone. [y/N] ", relative_path);
         io::stderr().flush()?;
 
         let mut input = String::new();
@@ -499,56 +460,111 @@ pub fn note_delete(
         }
     }
 
-    create_delete_snapshot(vault_path, name, &file_path)?;
-    fs::remove_file(&file_path)?;
+    // Delete via kernel (handles snapshots internally)
+    ctx.vault
+        .delete_file(&relative_path)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // Update indexes
+    ctx.on_file_deleted(&relative_path);
 
     if matches!(format, OutputFormat::Json) {
         emit_json(&json!({
             "deleted": true,
-            "path": relative_display_path(vault_path, &file_path)
+            "path": relative_path
         }))?;
         return Ok(());
     }
 
-    println!("{} Deleted: {}", "OK".green(), relative_display_path(vault_path, &file_path));
+    println!("{} Deleted: {}", "OK".green(), relative_path);
     Ok(())
 }
 
 pub fn note_links(vault_path: &Path, name: &str, format: OutputFormat) -> Result<()> {
-    ensure_vault(vault_path)?;
+    let ctx = open_vault_or_exit(vault_path);
 
-    let file_path = resolve_note_path(vault_path, name)?;
-    let content = fs::read_to_string(&file_path)?;
-    let mut links = Vec::new();
+    let relative_path = resolve_note_path_from_vault(&ctx, name);
 
-    let mut rest = content.as_str();
-    while let Some(start) = rest.find("[[") {
-        if let Some(end) = rest[start + 2..].find("]]") {
-            let inner = &rest[start + 2..start + 2 + end];
-            let target = inner.split('|').next().unwrap_or(inner).trim().to_string();
-            links.push(target);
-            rest = &rest[start + 2 + end + 2..];
-        } else {
-            break;
-        }
-    }
+    // Build indexes to ensure link data is fresh
+    ctx.build_indexes()
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    let links = ctx
+        .link_index
+        .lock()
+        .map_err(|e| anyhow::anyhow!("Link index lock poisoned: {}", e))?
+        .get_forward_links(&relative_path);
+
+    let link_targets: Vec<String> = links
+        .iter()
+        .map(|l| {
+            if let Some(ref display) = l.display_text {
+                format!("{} [{}]", l.target, display)
+            } else {
+                l.target.clone()
+            }
+        })
+        .collect();
 
     if matches!(format, OutputFormat::Json) {
         emit_json(&json!({
-            "path": relative_display_path(vault_path, &file_path),
-            "links": links
+            "path": relative_path,
+            "links": link_targets
         }))?;
         return Ok(());
     }
 
     println!("{}", "Outgoing links:".bold());
-    if links.is_empty() {
+    if link_targets.is_empty() {
         println!("  (no links found)");
         return Ok(());
     }
 
-    for link in &links {
+    for link in &link_targets {
         println!("  -> {}", link.cyan());
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Plugin commands
+// ---------------------------------------------------------------------------
+
+pub fn plugin_list(vault_path: &Path, format: OutputFormat) -> Result<()> {
+    ensure_vault(vault_path)?;
+
+    let plugins = mindzj_kernel::plugins::list_plugins(vault_path)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    if matches!(format, OutputFormat::Json) {
+        emit_json(&json!({
+            "count": plugins.len(),
+            "plugins": plugins
+        }))?;
+        return Ok(());
+    }
+
+    if plugins.is_empty() {
+        println!("No plugins installed.");
+        return Ok(());
+    }
+
+    println!("{}", "Installed plugins:".bold());
+    for plugin in &plugins {
+        let status = if plugin.enabled { "enabled" } else { "disabled" };
+        let status_colored = if plugin.enabled {
+            status.green()
+        } else {
+            status.dimmed()
+        };
+        println!(
+            "  {} v{} [{}] - {}",
+            plugin.manifest.name.cyan(),
+            plugin.manifest.version,
+            status_colored,
+            plugin.manifest.description
+        );
     }
 
     Ok(())
@@ -559,19 +575,20 @@ pub fn note_links(vault_path: &Path, name: &str, format: OutputFormat) -> Result
 // ---------------------------------------------------------------------------
 
 pub fn config_get(vault_path: &Path, key: &str, format: OutputFormat) -> Result<()> {
-    let config_path = vault_path.join(".mindzj").join("config.json");
+    let ctx = open_vault_or_exit(vault_path);
 
-    if !config_path.exists() {
-        if matches!(format, OutputFormat::Json) {
-            emit_json(&json!({ "key": key, "value": null }))?;
-        } else {
-            println!("(not set)");
-        }
-        return Ok(());
-    }
+    // Load settings from kernel
+    ctx.load_settings()
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-    let data: serde_json::Value = serde_json::from_str(&fs::read_to_string(&config_path)?)?;
-    let value = data.get(key).cloned().unwrap_or(serde_json::Value::Null);
+    let settings = ctx
+        .settings
+        .read()
+        .map_err(|e| anyhow::anyhow!("Settings lock poisoned: {}", e))?;
+
+    // Serialize settings to JSON to query by key
+    let settings_json = serde_json::to_value(&*settings)?;
+    let value = settings_json.get(key).cloned().unwrap_or(serde_json::Value::Null);
 
     if matches!(format, OutputFormat::Json) {
         emit_json(&json!({ "key": key, "value": value }))?;
@@ -585,17 +602,27 @@ pub fn config_get(vault_path: &Path, key: &str, format: OutputFormat) -> Result<
 }
 
 pub fn config_set(vault_path: &Path, key: &str, value: &str, format: OutputFormat) -> Result<()> {
-    ensure_vault(vault_path)?;
+    let ctx = open_vault_or_exit(vault_path);
 
-    let config_path = vault_path.join(".mindzj").join("config.json");
-    let mut data: serde_json::Value = if config_path.exists() {
-        serde_json::from_str(&fs::read_to_string(&config_path)?)?
-    } else {
-        json!({})
-    };
+    // Load current settings
+    ctx.load_settings()
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-    data[key] = serde_json::Value::String(value.to_string());
-    fs::write(&config_path, serde_json::to_string_pretty(&data)?)?;
+    // Update settings via JSON manipulation
+    {
+        let mut settings = ctx
+            .settings
+            .write()
+            .map_err(|e| anyhow::anyhow!("Settings lock poisoned: {}", e))?;
+
+        let mut settings_json = serde_json::to_value(&*settings)?;
+        settings_json[key] = serde_json::Value::String(value.to_string());
+        *settings = serde_json::from_value(settings_json)?;
+    }
+
+    // Save settings via kernel
+    ctx.save_settings()
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     if matches!(format, OutputFormat::Json) {
         emit_json(&json!({
@@ -613,9 +640,13 @@ pub fn config_set(vault_path: &Path, key: &str, value: &str, format: OutputForma
 pub fn api_key_create(vault_path: &Path, format: OutputFormat) -> Result<()> {
     ensure_vault(vault_path)?;
 
-    let key_bytes: [u8; 32] = rand::random();
-    let api_key = format!("mzk_{}", hex::encode(&key_bytes[..16]));
+    // Generate API key using kernel's crypto
+    use rand::Rng;
+    let key_bytes: [u8; 16] = rand::thread_rng().gen();
+    let api_key = format!("mzk_{}", hex::encode(&key_bytes));
 
+    // Hash the key for storage
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(api_key.as_bytes());
     let hash = hex::encode(hasher.finalize());
@@ -711,6 +742,21 @@ fn ensure_vault(vault_path: &Path) -> Result<()> {
     Ok(())
 }
 
+fn open_vault_or_exit(vault_path: &Path) -> Arc<VaultContext> {
+    ensure_vault(vault_path).unwrap_or_else(|_| std::process::exit(1));
+
+    let name = vault_path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+
+    open_vault_context(vault_path, &name).unwrap_or_else(|e| {
+        eprintln!("{} Failed to open vault: {}", "Error:".red(), e);
+        std::process::exit(1);
+    })
+}
+
 fn normalize_note_name(name: &str) -> String {
     if name.ends_with(".md") {
         name.to_string()
@@ -719,10 +765,61 @@ fn normalize_note_name(name: &str) -> String {
     }
 }
 
-fn resolve_note_destination(vault_path: &Path, name: &str) -> PathBuf {
+fn resolve_note_destination(name: &str) -> String {
     let normalized = name.replace('\\', "/");
-    let destination = normalize_note_name(&normalized);
-    vault_path.join(destination)
+    normalize_note_name(&normalized)
+}
+
+fn resolve_note_path_from_vault(ctx: &VaultContext, name: &str) -> String {
+    // Try direct path first
+    let direct = name.to_string();
+    if ctx.vault.read_file(&direct).is_ok() {
+        return direct;
+    }
+
+    // Try with .md extension
+    let with_ext = normalize_note_name(name);
+    if ctx.vault.read_file(&with_ext).is_ok() {
+        return with_ext;
+    }
+
+    // Search by filename
+    let entries = ctx.vault.file_tree(10).unwrap_or_default();
+    let mut found = Vec::new();
+    search_in_entries(&entries, name, &mut found);
+
+    match found.len() {
+        0 => {
+            eprintln!("{} Note '{}' not found.", "Error:".red(), name);
+            std::process::exit(1);
+        }
+        1 => found.into_iter().next().unwrap(),
+        _ => {
+            eprintln!("{} Multiple matches for '{}':", "Error:".red(), name);
+            for path in &found {
+                eprintln!("  {}", path);
+            }
+            eprintln!("Use the full path to specify which one.");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn search_in_entries(entries: &[mindzj_kernel::types::VaultEntry], name: &str, results: &mut Vec<String>) {
+    for entry in entries {
+        if entry.is_dir {
+            if let Some(ref children) = entry.children {
+                search_in_entries(children, name, results);
+            }
+        } else {
+            let file_name = &entry.name;
+            let name_no_ext = file_name.trim_end_matches(".md");
+
+            if file_name == name || name_no_ext == name {
+                results.push(entry.relative_path.clone());
+            }
+        }
+    }
 }
 
 fn read_content_input(content: Option<&str>, read_stdin: bool) -> Result<String> {
@@ -748,150 +845,36 @@ fn read_required_content(content: Option<&str>, read_stdin: bool, action: &str) 
     Ok(value)
 }
 
-fn atomic_write_string(path: &Path, content: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    let tmp_path = path.with_extension("tmp");
-    let mut tmp_file = fs::File::create(&tmp_path)?;
-    tmp_file.write_all(content.as_bytes())?;
-    tmp_file.sync_all()?;
-    fs::rename(&tmp_path, path)?;
-    Ok(())
-}
-
-fn create_delete_snapshot(vault_path: &Path, name: &str, file_path: &Path) -> Result<()> {
-    let snapshots_dir = vault_path.join(".mindzj").join("snapshots");
-    if !snapshots_dir.exists() {
-        return Ok(());
-    }
-
-    let content = fs::read(file_path)?;
-    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-    let safe_name = name.replace('/', "__");
-    let snapshot_path = snapshots_dir.join(format!("{}_{}_deleted", safe_name, timestamp));
-    fs::write(snapshot_path, &content)?;
-    Ok(())
-}
-
-fn try_resolve_note_path(vault_path: &Path, name: &str) -> Result<Option<PathBuf>> {
-    let direct = vault_path.join(name);
-    if direct.exists() {
-        return Ok(Some(direct));
-    }
-
-    let with_ext = vault_path.join(format!("{}.md", name));
-    if with_ext.exists() {
-        return Ok(Some(with_ext));
-    }
-
-    let mut found = Vec::new();
-    search_file_recursive(vault_path, name, &mut found)?;
-
-    match found.len() {
-        0 => Ok(None),
-        1 => Ok(found.into_iter().next()),
-        _ => {
-            eprintln!("{} Multiple matches for '{}':", "Error:".red(), name);
-            for path in &found {
-                eprintln!("  {}", relative_display_path(vault_path, path));
-            }
-            eprintln!("Use the full path to specify which one.");
-            std::process::exit(1);
-        }
-    }
-}
-
-fn resolve_note_path(vault_path: &Path, name: &str) -> Result<PathBuf> {
-    match try_resolve_note_path(vault_path, name)? {
-        Some(path) => Ok(path),
-        None => {
-            eprintln!("{} Note '{}' not found.", "Error:".red(), name);
-            std::process::exit(1);
-        }
-    }
-}
-
-fn relative_display_path(vault_path: &Path, path: &Path) -> String {
-    path.strip_prefix(vault_path)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/")
-}
-
-fn search_file_recursive(dir: &Path, name: &str, results: &mut Vec<PathBuf>) -> Result<()> {
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if path.is_dir() {
-            if !path
-                .file_name()
-                .map(|n| n.to_string_lossy().starts_with('.'))
-                .unwrap_or(true)
-            {
-                search_file_recursive(&path, name, results)?;
+fn count_entries(entries: &[mindzj_kernel::types::VaultEntry]) -> (u32, u64) {
+    let mut md_count = 0u32;
+    let mut total_size = 0u64;
+    for entry in entries {
+        if entry.is_dir {
+            if let Some(ref children) = entry.children {
+                let (c, s) = count_entries(children);
+                md_count += c;
+                total_size += s;
             }
         } else {
-            let file_name = path.file_name().unwrap_or_default().to_string_lossy();
-            let name_no_ext = file_name.trim_end_matches(".md");
-
-            if file_name == name || name_no_ext == name {
-                results.push(path);
+            total_size += entry.size;
+            if entry.extension == "md" {
+                md_count += 1;
             }
         }
     }
-    Ok(())
+    (md_count, total_size)
 }
 
-fn collect_notes_recursive(
-    dir: &Path,
-    _vault_root: &Path,
-    notes: &mut Vec<(PathBuf, String)>,
-) -> Result<()> {
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if path.is_dir() {
-            if !path
-                .file_name()
-                .map(|n| n.to_string_lossy().starts_with('.'))
-                .unwrap_or(true)
-            {
-                collect_notes_recursive(&path, _vault_root, notes)?;
+fn collect_note_paths(entries: &[mindzj_kernel::types::VaultEntry], results: &mut Vec<String>) {
+    for entry in entries {
+        if entry.is_dir {
+            if let Some(ref children) = entry.children {
+                collect_note_paths(children, results);
             }
-        } else if path.extension().map(|e| e == "md").unwrap_or(false) {
-            let content = fs::read_to_string(&path).unwrap_or_default();
-            notes.push((path, content));
+        } else if entry.extension == "md" {
+            results.push(entry.relative_path.clone());
         }
     }
-    Ok(())
-}
-
-fn count_files_recursive(dir: &Path, md_count: &mut u32, total_size: &mut u64) -> Result<()> {
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if path.is_dir() {
-            if !path
-                .file_name()
-                .map(|n| n.to_string_lossy().starts_with('.'))
-                .unwrap_or(true)
-            {
-                count_files_recursive(&path, md_count, total_size)?;
-            }
-        } else {
-            let meta = entry.metadata()?;
-            *total_size += meta.len();
-            if path.extension().map(|e| e == "md").unwrap_or(false) {
-                *md_count += 1;
-            }
-        }
-    }
-    Ok(())
 }
 
 fn format_bytes(bytes: u64) -> String {

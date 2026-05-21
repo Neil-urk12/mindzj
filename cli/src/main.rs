@@ -61,6 +61,12 @@ enum Commands {
         #[command(subcommand)]
         action: ConfigAction,
     },
+
+    /// Plugin management
+    Plugin {
+        #[command(subcommand)]
+        action: PluginAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -225,6 +231,12 @@ enum ApiKeyAction {
     Status,
 }
 
+#[derive(Subcommand)]
+enum PluginAction {
+    /// List installed plugins
+    List,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let api_key = cli
@@ -356,6 +368,10 @@ fn main() -> Result<()> {
                 ApiKeyAction::Revoke => commands::api_key_revoke(&vault_path, cli.format),
                 ApiKeyAction::Status => commands::api_key_status(&vault_path, cli.format),
             },
+        },
+
+        Commands::Plugin { action } => match action {
+            PluginAction::List => commands::plugin_list(&vault_path, cli.format),
         },
     }
 }
