@@ -1,35 +1,8 @@
 import { createSignal, createRoot } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
-import type { ViewMode } from "./editor";
+import type { WorkspaceState } from "../types";
 
-type FileScrollPositionMap = Record<string, Partial<Record<ViewMode, number>>>;
-type EditableViewMode = Exclude<ViewMode, "reading">;
-type PaneSlot = "primary" | "secondary";
-type SplitDirection = "left" | "right" | "up" | "down";
-
-export interface WorkspaceState {
-  open_files: string[];
-  active_file: string | null;
-  primary_pane_path?: string | null;
-  secondary_pane_path?: string | null;
-  active_pane_slot?: PaneSlot;
-  split_direction?: SplitDirection;
-  split_ratio?: number;
-  sidebar_tab: string;
-  sidebar_collapsed: boolean;
-  sidebar_width: number;
-  sidebar_tab_order?: string[];
-  file_scroll_positions?: FileScrollPositionMap;
-  file_top_lines?: Record<string, number>;
-  file_view_modes?: Record<string, ViewMode>;
-  file_last_non_reading_view_modes?: Record<string, EditableViewMode>;
-  // Window geometry
-  window_x?: number | null;
-  window_y?: number | null;
-  window_width?: number | null;
-  window_height?: number | null;
-  window_maximized?: boolean | null;
-}
+export type { WorkspaceState } from "../types";
 
 const DEFAULT_WORKSPACE: WorkspaceState = {
   open_files: [],
@@ -47,6 +20,11 @@ const DEFAULT_WORKSPACE: WorkspaceState = {
   file_top_lines: {},
   file_view_modes: {},
   file_last_non_reading_view_modes: {},
+  window_x: null,
+  window_y: null,
+  window_width: null,
+  window_height: null,
+  window_maximized: null,
 };
 
 function createWorkspaceStore() {

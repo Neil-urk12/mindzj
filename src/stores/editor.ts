@@ -8,8 +8,9 @@ import {
   collectReferencedAnchors,
   updateBacklinksOnHeadingRename,
 } from "../utils/linkUpdater";
+import type { ViewMode } from "../types";
 
-export type ViewMode = "source" | "live-preview" | "reading";
+export type { ViewMode } from "../types";
 type EditableViewMode = Exclude<ViewMode, "reading">;
 type FileScrollPositionMap = Record<string, Partial<Record<ViewMode, number>>>;
 type FileTopLineMap = Record<string, number>;

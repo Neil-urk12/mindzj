@@ -100,6 +100,8 @@ export const GROK_TTS_LANGUAGE_OPTIONS: AiModelOption[] = [
 
 const PROVIDER_DEFAULTS: Record<AiProviderType, AiProviderConfig> = {
   Ollama: {
+    id: null,
+    display_name: null,
     provider_type: "Ollama",
     endpoint: "http://localhost:11434/v1",
     api_key: null,
@@ -107,6 +109,8 @@ const PROVIDER_DEFAULTS: Record<AiProviderType, AiProviderConfig> = {
     model: "llama3.2",
   },
   LMStudio: {
+    id: null,
+    display_name: null,
     provider_type: "LMStudio",
     endpoint: "http://localhost:1234/v1",
     api_key: null,
@@ -114,6 +118,8 @@ const PROVIDER_DEFAULTS: Record<AiProviderType, AiProviderConfig> = {
     model: "local-model",
   },
   ApiKeyLLM: {
+    id: null,
+    display_name: null,
     provider_type: "ApiKeyLLM",
     endpoint: null,
     api_key: null,
@@ -121,48 +127,54 @@ const PROVIDER_DEFAULTS: Record<AiProviderType, AiProviderConfig> = {
     model: "",
   },
   OpenAI: {
-    provider_type: "OpenAI",
+    id: null,
     display_name: "OpenAI",
+    provider_type: "OpenAI",
     endpoint: "https://api.openai.com/v1",
     api_key: null,
     has_api_key: false,
     model: "gpt-5.5",
   },
   Claude: {
-    provider_type: "Claude",
+    id: null,
     display_name: "Claude",
+    provider_type: "Claude",
     endpoint: "https://api.anthropic.com/v1",
     api_key: null,
     has_api_key: false,
     model: "claude-sonnet-4-6",
   },
   Grok: {
-    provider_type: "Grok",
+    id: null,
     display_name: "Grok",
+    provider_type: "Grok",
     endpoint: "https://api.x.ai/v1",
     api_key: null,
     has_api_key: false,
     model: "grok-4.20",
   },
   Gemini: {
-    provider_type: "Gemini",
+    id: null,
     display_name: "Gemini",
+    provider_type: "Gemini",
     endpoint: "https://generativelanguage.googleapis.com/v1beta",
     api_key: null,
     has_api_key: false,
     model: "gemini-3-flash-preview",
   },
   DeepSeek: {
-    provider_type: "DeepSeek",
+    id: null,
     display_name: "DeepSeek",
+    provider_type: "DeepSeek",
     endpoint: "https://api.deepseek.com",
     api_key: null,
     has_api_key: false,
     model: "deepseek-v4-pro",
   },
   Custom: {
-    provider_type: "Custom",
+    id: null,
     display_name: "Custom",
+    provider_type: "Custom",
     endpoint: null,
     api_key: null,
     has_api_key: false,
@@ -932,7 +944,7 @@ const TOOLS: ToolDefinition[] = [
       parameters: {
         type: "object",
         properties: {
-          mode: { type: "string", enum: ["Source", "LivePreview", "Reading"] },
+          mode: { type: "string", enum: ["source", "live-preview", "reading"] },
         },
         required: ["mode"],
         additionalProperties: false,
@@ -1347,11 +1359,11 @@ async function executeTool(name: string, args: any, context?: ToolExecutionConte
         return { ok: true, message: `View mode set to ${mode}` };
       }
       case "set_default_view_mode": {
-        const mode = String(args.mode ?? "LivePreview");
-        if (!["Source", "LivePreview", "Reading"].includes(mode)) {
+        const mode = String(args.mode ?? "live-preview");
+        if (!["source", "live-preview", "reading"].includes(mode)) {
           return { ok: false, message: `Invalid default view mode: ${mode}` };
         }
-        await settingsStore.updateSetting("default_view_mode", mode);
+        await settingsStore.updateSetting("default_view_mode", mode as ViewMode);
         return { ok: true, message: `Default view mode set to ${mode}` };
       }
       case "get_settings": {

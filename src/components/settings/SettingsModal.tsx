@@ -36,6 +36,7 @@ import {
     reloadCssSnippets,
     DEFAULT_FONT_FAMILY,
 } from "../../stores/settings";
+import type { ViewMode } from "../../types";
 import {
     BUILT_IN_SKINS,
     CUSTOM_SKIN_PREFIX,
@@ -988,21 +989,21 @@ export const SettingsModal: Component<SettingsModalProps> = (props) => {
                                 value={s().default_view_mode}
                                 options={[
                                     {
-                                        value: "Source",
+                                        value: "source",
                                         label: t("settings.viewMode.source"),
                                     },
                                     {
-                                        value: "LivePreview",
+                                        value: "live-preview",
                                         label: t(
                                             "settings.viewMode.livePreview",
                                         ),
                                     },
                                     {
-                                        value: "Reading",
+                                        value: "reading",
                                         label: t("settings.viewMode.reading"),
                                     },
                                 ]}
-                                onChange={(v) => set("default_view_mode", v)}
+                                onChange={(v) => set("default_view_mode", v as ViewMode)}
                             />
                         </SettingSection>
 

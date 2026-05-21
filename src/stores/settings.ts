@@ -9,6 +9,10 @@ import {
     resolveDataTheme,
     skinMode,
 } from "../styles/themes";
+import type { AppSettings, AiProviderConfig, AiSkill, AiProviderType, HotkeyBinding } from "../types";
+
+// Re-export for consumers
+export type { AppSettings, AiProviderConfig, AiSkill, AiProviderType } from "../types";
 
 export const DEFAULT_FONT_FAMILY =
     '"Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", "Noto Sans", Ubuntu, Cantarell, sans-serif';
@@ -69,33 +73,6 @@ export async function applyCssSnippets(enabled: string[]) {
  */
 export type Theme = string;
 type PersistedTheme = Theme | "Light" | "Dark" | "System";
-export type AiProviderType =
-    | "Ollama"
-    | "LMStudio"
-    | "ApiKeyLLM"
-    | "OpenAI"
-    | "Claude"
-    | "Grok"
-    | "Gemini"
-    | "DeepSeek"
-    | "Custom";
-
-export interface AiProviderConfig {
-    id?: string | null;
-    display_name?: string | null;
-    provider_type: AiProviderType;
-    endpoint: string | null;
-    api_key?: string | null;
-    has_api_key: boolean;
-    model: string;
-}
-
-export interface AiSkill {
-    id: string;
-    name: string;
-    description?: string | null;
-    content: string;
-}
 
 interface PersistedSettings extends Omit<Partial<AppSettings>, "theme"> {
     theme?: PersistedTheme | null;
@@ -110,103 +87,8 @@ export const KNOWN_SKIN_IDS: readonly string[] = [
 /** Readable label for `custom:` prefix — re-exported so UIs can use it. */
 export const CUSTOM_THEME_PREFIX = CUSTOM_SKIN_PREFIX;
 
-export interface AppSettings {
-    theme: Theme;
-    font_size: number;
-    font_family: string;
-    show_markdown_toolbar: boolean;
-    editor_line_numbers: boolean;
-    markdown_code_block_line_numbers: boolean;
-    editor_word_wrap: boolean;
-    editor_spell_check: boolean;
-    editor_readable_line_length: boolean;
-    auto_save_interval_ms: number;
-    default_view_mode: string;
-    locale: string;
-    accent_color: string | null;
-    // Per-element color overrides. When null, the theme's built-in
-    // CSS variable is used; when set, it replaces the variable on
-    // `document.documentElement` via a reactive effect further down.
-    // Each one has a corresponding "reset" button in Settings →
-    // Appearance that clears the override back to null.
-    heading_color: string | null;
-    link_color: string | null;
-    highlight_color: string | null;
-    /** Bold (**text**) text color. Feeds `--mz-syntax-bold` which
-     *  source, live-preview, and reading mode all consume for their
-     *  bold styling rules. `null` = theme default (red in dark,
-     *  darker red in light). */
-    bold_color: string | null;
-    /** When true (default), bare URLs like `github.com/zjok/mindzj`
-     *  and `https://example.com` are rendered as clickable links in
-     *  reading + live-preview mode, and click dispatches to the user's
-     *  default browser via the shell-plugin. When false, the same
-     *  text renders as plain unstyled text and clicks are inert. */
-    auto_link_urls: boolean;
-    /** Text selection background color. Applied to both CM6
-     *  `.cm-selectionBackground` and the generic `::selection`
-     *  pseudo-element via the `--mz-bg-selection` CSS variable.
-     *  `null` means "use the theme default" (rgba blue in dark,
-     *  rgba blue-grey in light). */
-    selection_color: string | null;
-    /** File-tree drag indicator line color. Applied via the
-     *  `--mz-drag-indicator` CSS variable. `null` means "use the
-     *  theme accent color" (green by default). */
-    drag_indicator_color: string | null;
-    css_snippet: string | null;
-    /**
-     * List of enabled CSS snippet filenames from `.mindzj/snippets/`.
-     * The actual snippet contents live as `.css` files in the vault —
-     * this array just tracks which ones are currently applied. 
-     * uses the same model (enabled snippets list in appearance.json).
-     */
-    enabled_css_snippets: string[];
-    attachment_folder: string;
-    auto_update_links: boolean;
-    default_new_note_location: string;
-    template_folder: string | null;
-    ai_provider: AiProviderConfig | null;
-    ai_custom_providers: AiProviderConfig[];
-    /** Per-model prompt overrides, keyed by aiModelSettingsKey(config). */
-    ai_model_prompts: Record<string, string>;
-    /** Per-vault reusable AI skills. */
-    ai_skills: AiSkill[];
-    /** Per-model selected skill ids, keyed by aiModelSettingsKey(config). */
-    ai_model_skill_ids: Record<string, string[]>;
-    /** Built-in voice provider for STT/TTS features. */
-    ai_voice_provider: string;
-    /** Built-in speech-to-text model identifier shown in settings. */
-    ai_stt_model: string;
-    /** xAI TTS voice id. */
-    ai_tts_voice: string;
-    /** xAI TTS language code or auto detection. */
-    ai_tts_language: string;
-    /** Absolute folder path for exported TTS audio files. */
-    ai_voice_export_folder: string | null;
-    /** Custom hotkey overrides: command -> key combo string (e.g. "Ctrl+Shift+L") */
-    hotkey_overrides: Record<string, string>;
-
-    // --- Image (Pixel Perfect) settings ---
-    /** Comma-separated resize presets shown in context menu, e.g. "25%, 33%, 50%, 100%" or "200px, 400px" */
-    image_resize_options: string;
-    /** Ctrl+click behavior on images */
-    image_ctrl_click:
-        | "open-in-new-tab"
-        | "open-in-default-app"
-        | "show-in-explorer";
-    /** Enable Alt+mousewheel zoom on images */
-    image_wheel_zoom: boolean;
-    /** Modifier key for wheel zoom */
-    image_wheel_modifier: "Alt" | "Ctrl" | "Shift";
-    /** Percentage per scroll step for wheel zoom */
-    image_wheel_zoom_step: number;
-    /** Invert scroll direction for wheel zoom */
-    image_wheel_invert: boolean;
-}
-
-interface HotkeyBinding {
-    command: string;
-    keys: string;
+interface PersistedSettings extends Omit<Partial<AppSettings>, "theme"> {
+    theme?: PersistedTheme | null;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -220,7 +102,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     editor_spell_check: false,
     editor_readable_line_length: true,
     auto_save_interval_ms: 2000,
-    default_view_mode: "LivePreview",
+    default_view_mode: "live-preview",
     // Default UI language is English. Users can switch language from the
     // welcome screen (saved to localStorage under "mindzj-pending-locale")
     // or from Settings → Appearance once a vault is open.

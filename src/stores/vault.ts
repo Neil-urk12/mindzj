@@ -1,46 +1,8 @@
 import { createSignal, createRoot } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
+import type { VaultInfo, VaultEntry, FileContent } from "../types";
 
-// ---------------------------------------------------------------------------
-// Types mirroring Rust kernel types
-// ---------------------------------------------------------------------------
-
-export interface VaultInfo {
-  name: string;
-  path: string;
-  created_at: string;
-  last_opened: string;
-}
-
-export interface VaultEntry {
-  name: string;
-  relative_path: string;
-  is_dir: boolean;
-  size: number;
-  modified: string;
-  extension: string;
-  children?: VaultEntry[];
-}
-
-export interface FileContent {
-  path: string;
-  content: string;
-  modified: string;
-  hash: string;
-  kind?: "text" | "image" | "document";
-}
-
-export interface FileMetadata {
-  relative_path: string;
-  size: number;
-  created: string;
-  modified: string;
-  is_markdown: boolean;
-  word_count: number;
-  char_count: number;
-  tags: string[];
-  backlink_count: number;
-}
+export type { VaultInfo, VaultEntry, FileContent } from "../types";
 
 // ---------------------------------------------------------------------------
 // Vault store

@@ -2,13 +2,15 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use ts_rs::TS;
 
 // ---------------------------------------------------------------------------
 // Vault types
 // ---------------------------------------------------------------------------
 
 /// A vault is a root directory containing the user's notes, config, and index.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct VaultInfo {
     /// Display name of the vault
     pub name: String,
@@ -25,7 +27,8 @@ pub struct VaultInfo {
 // ---------------------------------------------------------------------------
 
 /// Represents a single entry (file or directory) inside a vault.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct VaultEntry {
     /// File/directory name with extension
     pub name: String,
@@ -34,6 +37,7 @@ pub struct VaultEntry {
     /// True if this entry is a directory
     pub is_dir: bool,
     /// File size in bytes (0 for directories)
+    #[ts(type = "number")]
     pub size: u64,
     /// Last modified time
     pub modified: DateTime<Utc>,
@@ -45,9 +49,11 @@ pub struct VaultEntry {
 }
 
 /// Metadata for a single file.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct FileMetadata {
     pub relative_path: String,
+    #[ts(type = "number")]
     pub size: u64,
     pub created: DateTime<Utc>,
     pub modified: DateTime<Utc>,
@@ -59,7 +65,8 @@ pub struct FileMetadata {
 }
 
 /// Events emitted by the file system watcher.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 #[serde(tag = "kind")]
 pub enum FileEvent {
     Created { path: String },
@@ -73,7 +80,8 @@ pub enum FileEvent {
 // ---------------------------------------------------------------------------
 
 /// Represents a link from one note to another.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct NoteLink {
     /// Path of the source file (where the link is written)
     pub source: String,
@@ -89,7 +97,8 @@ pub struct NoteLink {
     pub column: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export)]
 pub enum LinkType {
     /// [[target]] or [[target|display]]
     WikiLink,
@@ -100,13 +109,14 @@ pub enum LinkType {
 }
 
 /// Data for the graph view.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct GraphData {
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphEdge>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct GraphNode {
     pub id: String,
     pub label: String,
@@ -115,7 +125,7 @@ pub struct GraphNode {
     pub backlink_count: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct GraphEdge {
     pub source: String,
     pub target: String,
@@ -126,7 +136,8 @@ pub struct GraphEdge {
 // Search types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct SearchQuery {
     pub text: String,
     /// Maximum number of results to return
@@ -137,7 +148,8 @@ pub struct SearchQuery {
     pub path_filter: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct SearchResult {
     pub path: String,
     pub file_name: String,
@@ -147,7 +159,8 @@ pub struct SearchResult {
     pub score: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct SearchSnippet {
     pub text: String,
     pub line: u32,
@@ -161,7 +174,8 @@ pub struct SearchSnippet {
 // ---------------------------------------------------------------------------
 
 /// Content of a file being edited.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct FileContent {
     pub path: String,
     pub content: String,
@@ -171,7 +185,8 @@ pub struct FileContent {
 }
 
 /// Outline heading extracted from a markdown file.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 #[allow(dead_code)]
 pub struct OutlineHeading {
     pub level: u8,
@@ -183,7 +198,8 @@ pub struct OutlineHeading {
 // Settings types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct AppSettings {
     /// Active skin ID. Was originally a `Theme` enum with just
     /// `Light`/`Dark`/`System`; widened to a free-form string so
@@ -210,6 +226,7 @@ pub struct AppSettings {
     #[serde(default = "default_true")]
     pub editor_readable_line_length: bool,
     pub auto_save_interval_ms: u32,
+    #[serde(deserialize_with = "deserialize_view_mode")]
     pub default_view_mode: ViewMode,
     pub locale: String,
     // Appearance
@@ -387,7 +404,8 @@ impl Default for AppSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export)]
 pub enum NewNoteLocation {
     VaultRoot,
     SameFolder,
@@ -402,7 +420,8 @@ impl Default for NewNoteLocation {
 // Workspace types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct WorkspaceState {
     pub open_files: Vec<String>,
     pub active_file: Option<String>,
@@ -473,24 +492,19 @@ impl Default for WorkspaceState {
 // Hotkey types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct HotkeyBinding {
     pub command: String,
     pub keys: String,
 }
 
 /// Deprecated placeholder kept for command signatures that still take a
-/// "theme" parameter. The active skin is now a free-form string (see
-/// `AppSettings::theme`), but the `set_theme` Tauri command continues to
-/// accept the legacy enum payload so older frontends still work. New
-/// code should call `update_settings` with the full `AppSettings`
-/// struct — `set_theme` is only used by the legacy frontend path.
+/// "theme" parameter.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum Theme {
-    /// Free-form string (preferred) — accepts all built-in and custom IDs.
     Str(String),
-    /// Legacy tagged enum form for older persisted settings.
     Tag(ThemeTag),
 }
 
@@ -505,8 +519,6 @@ pub enum ThemeTag {
 }
 
 impl Theme {
-    /// Collapse any variant into the canonical string ID stored in
-    /// `AppSettings::theme`.
     pub fn as_id(&self) -> String {
         match self {
             Theme::Str(s) => normalize_theme(Some(s.clone())),
@@ -517,14 +529,34 @@ impl Theme {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// Deserialize ViewMode accepting both PascalCase (legacy) and kebab-case.
+fn deserialize_view_mode<'de, D>(deserializer: D) -> Result<ViewMode, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    match s.as_str() {
+        "source" | "Source" => Ok(ViewMode::Source),
+        "live-preview" | "LivePreview" => Ok(ViewMode::LivePreview),
+        "reading" | "Reading" => Ok(ViewMode::Reading),
+        _ => Err(serde::de::Error::unknown_variant(
+            &s,
+            &["source", "live-preview", "reading"],
+        )),
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export, rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
 pub enum ViewMode {
     Source,
     LivePreview,
     Reading,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct AiProviderConfig {
     #[serde(default)]
     pub id: Option<String>,
@@ -542,7 +574,8 @@ pub struct AiProviderConfig {
     pub model: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct AiSkill {
     pub id: String,
     pub name: String,
@@ -552,7 +585,8 @@ pub struct AiSkill {
     pub content: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export)]
 pub enum AiProviderType {
     Ollama,
     LMStudio,
@@ -569,7 +603,8 @@ pub enum AiProviderType {
 // Global window state (not per-vault — shared across all vaults)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct GlobalWindowState {
     #[serde(default)]
     pub x: Option<i32>,
