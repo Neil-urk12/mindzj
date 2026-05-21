@@ -1,6 +1,7 @@
+import { VAULT_CONFIG_DIR, IMAGES_DIR, PLUGINS_DIR, DEFAULT_ATTACHMENT_FOLDER } from "../constants/vaultPaths";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
-export const DEFAULT_ATTACHMENT_FOLDER = ".mindzj/images";
+export { DEFAULT_ATTACHMENT_FOLDER };
 
 // Matches URL schemes (http:, https:, ftp:, etc.) but NOT single-letter
 // Windows drive designations (C:, D:) — the `+` requires at least two
@@ -57,7 +58,7 @@ export function resolveNoteRelativePath(
   if (normalized.startsWith("/")) {
     return joinVaultPath(normalized.slice(1));
   }
-  if (normalized.startsWith(".mindzj/")) {
+  if (normalized.startsWith(`${VAULT_CONFIG_DIR}/`)) {
     return joinVaultPath(normalized);
   }
   return joinVaultPath(getParentPath(currentFilePath ?? ""), normalized);

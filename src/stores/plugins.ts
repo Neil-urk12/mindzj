@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { vaultStore } from "./vault";
 import { getClientPlatform } from "../utils/platform";
 import { toVaultAssetUrl } from "../utils/vaultPaths";
+import { VAULT_CONFIG_DIR, IMAGES_DIR, PLUGINS_DIR } from "../constants/vaultPaths";
 
 function getScopedPluginLocalStorageKey(pluginId: string, key: string) {
     const vaultScope = encodeURIComponent(
@@ -2149,8 +2150,9 @@ function createAppObject(pluginId: string, obsidianModule?: any) {
                 if (normalized.includes(".mindzj/"))
                     return createTFileLike(normalized);
                 // Bare filename with extension → try .mindzj/images/
+                //    because the default attachment folder is excluded from the file tree
                 if (!normalized.includes("/") && /\.\w+$/.test(normalized)) {
-                    return createTFileLike(`.mindzj/images/${normalized}`);
+                    return createTFileLike(`${VAULT_CONFIG_DIR}/${IMAGES_DIR}/${normalized}`);
                 }
                 return null;
             },
@@ -2476,12 +2478,12 @@ function createAppObject(pluginId: string, obsidianModule?: any) {
                 const found = findFileInTree(link);
                 if (found) return found;
                 // 2. If link already contains .mindzj/ path, create a TFile directly
-                if (normalized.includes(".mindzj/"))
+                if (normalized.includes(`${VAULT_CONFIG_DIR}/`))
                     return createTFileLike(normalized);
                 // 3. For bare filenames (e.g. "image.png"), check .mindzj/images/
                 //    because the default attachment folder is excluded from the file tree
                 if (!normalized.includes("/") && /\.\w+$/.test(normalized)) {
-                    return createTFileLike(`.mindzj/images/${normalized}`);
+                    return createTFileLike(`${VAULT_CONFIG_DIR}/${IMAGES_DIR}/${normalized}`);
                 }
                 return null;
             },
@@ -2731,7 +2733,7 @@ function createObsidianShim(pluginId: string) {
         async loadData(): Promise<any> {
             try {
                 const r = await invoke<{ content: string }>("read_file", {
-                    relativePath: `.mindzj/plugins/${getPluginDataDir(pluginId)}/data.json`,
+                    relativePath: `${VAULT_CONFIG_DIR}/${PLUGINS_DIR}/${getPluginDataDir(pluginId)}/data.json`,
                 });
                 return JSON.parse(r.content);
             } catch {
@@ -2742,7 +2744,7 @@ function createObsidianShim(pluginId: string) {
         async saveData(data: any): Promise<void> {
             try {
                 await invoke("write_file", {
-                    relativePath: `.mindzj/plugins/${getPluginDataDir(pluginId)}/data.json`,
+                    relativePath: `${VAULT_CONFIG_DIR}/${PLUGINS_DIR}/${getPluginDataDir(pluginId)}/data.json`,
                     content: JSON.stringify(data, null, 2),
                 });
             } catch (e) {

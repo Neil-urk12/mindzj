@@ -5,7 +5,7 @@
 | Term | Definition |
 |------|-----------|
 | **Vault** | A directory of Markdown files + `.mindzj/` config dir. The primary unit of user data. |
-| **Kernel** | Rust backend layer: vault I/O, search index, file watcher, link graph. Shared by Tauri app and CLI. |
+| **Kernel** | Shared Rust crate (`crates/mindzj-kernel/`): vault I/O, search index, link graph, plugin ops. Used by both Tauri app and CLI. |
 | **Note** | A single Markdown file inside a vault. May contain wiki-links, frontmatter, embedded images. |
 | **Wiki-link** | `[[target]]` or `[[target|alias]]` syntax for cross-note references. Bidirectional. |
 | **Backlink** | A note that wiki-links *to* the current note. Computed by the link graph. |
