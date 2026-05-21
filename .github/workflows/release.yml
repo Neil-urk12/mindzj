@@ -174,11 +174,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.2
 
+      - name: Enable corepack
+        run: corepack enable
+
       - name: Setup Node 24.14.1
         uses: actions/setup-node@v6.4.0
         with:
           node-version: 24.14.1
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@1.94.1
@@ -258,10 +261,7 @@ jobs:
           # (see the matrix comment above for the full explanation).
 
       - name: Install frontend dependencies
-        run: npm ci
-        # `npm ci` instead of `npm install` — reproducible, respects
-        # package-lock.json exactly, fails if lock and package.json
-        # disagree.
+        run: pnpm install --frozen-lockfile
 
       - name: Build and upload via tauri-action
         uses: tauri-apps/tauri-action@v0.6.2
