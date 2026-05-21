@@ -84,6 +84,7 @@ import { EditorView } from "@codemirror/view";
 import { t } from "./i18n";
 import { setFindQuery } from "./stores/findState";
 import { getClientPlatform } from "./utils/platform";
+import { DEFAULT_ATTACHMENT_FOLDER } from "./constants/vaultPaths";
 import { SplitDirection, PaneSlot, AiPanelModelOption, AiQuestionHistoryEntry, AiHistoryDirection, Point, AI_QUESTION_HISTORY_LIMIT } from "./types/app";
 import { AI_PANEL_MIN_HEIGHT, AI_PANEL_DEFAULT_HEIGHT } from "./types/app";
 import { normalizeVaultPath, aiQuestionHistoryStorageKey, aiHistoryDateKey, parseAiQuestionHistory, aiPanelModelOptionValue, aiPanelModelOptionLabel, aiAudioFileTimestamp } from "./utils/aiHistory";
@@ -1218,7 +1219,7 @@ const App: Component = () => {
                     .slice(0, 14);
                 const filename = `screenshot_${timestamp}.png`;
                 const s = settingsStore.settings();
-                const folder = s.attachment_folder || ".mindzj/images";
+                const folder = s.attachment_folder || DEFAULT_ATTACHMENT_FOLDER;
                 const relativePath = `${folder}/${filename}`;
                 await invoke("write_binary_file", {
                     relativePath,

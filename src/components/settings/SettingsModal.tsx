@@ -57,6 +57,7 @@ import {
 } from "./controls";
 import { confirmDialog, promptDialog } from "../common/ConfirmDialog";
 import { getLanguageOptions, t } from "../../i18n";
+import { DEFAULT_ATTACHMENT_FOLDER, VAULT_CONFIG_DIR, SNIPPETS_DIR } from "../../constants/vaultPaths";
 
 type SettingsCategory =
     | "editor"
@@ -1905,7 +1906,7 @@ export const SettingsModal: Component<SettingsModalProps> = (props) => {
                                             set(
                                                 "attachment_folder",
                                                 e.currentTarget.value ||
-                                                    ".mindzj/images",
+                                                    DEFAULT_ATTACHMENT_FOLDER,
                                             )
                                         }
                                         style={{
@@ -1977,7 +1978,7 @@ export const SettingsModal: Component<SettingsModalProps> = (props) => {
                                                                 normalizedSelected
                                                                     .split("/")
                                                                     .pop() ||
-                                                                ".mindzj/images";
+                                                                DEFAULT_ATTACHMENT_FOLDER;
                                                             set(
                                                                 "attachment_folder",
                                                                 folderName,
@@ -4266,7 +4267,7 @@ const CssSnippetsPanel: Component = () => {
 
     const s = () => settingsStore.settings();
     const enabled = () => new Set(s().enabled_css_snippets ?? []);
-    const snippetsDir = ".mindzj/snippets";
+    const snippetsDir = `${VAULT_CONFIG_DIR}/${SNIPPETS_DIR}`;
     const snippetPath = (name: string) => `${snippetsDir}/${name}`;
 
     function normalizeSnippetName(value: string) {

@@ -2147,7 +2147,7 @@ function createAppObject(pluginId: string, obsidianModule?: any) {
                 const normalized = path.replace(/\\/g, "/").replace(/^\/+/, "");
                 const found = findFileInTree(path);
                 if (found) return found;
-                if (normalized.includes(".mindzj/"))
+                if (normalized.includes(`${VAULT_CONFIG_DIR}/`))
                     return createTFileLike(normalized);
                 // Bare filename with extension → try .mindzj/images/
                 //    because the default attachment folder is excluded from the file tree

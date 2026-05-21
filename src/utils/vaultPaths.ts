@@ -1,4 +1,4 @@
-import { VAULT_CONFIG_DIR, IMAGES_DIR, PLUGINS_DIR, DEFAULT_ATTACHMENT_FOLDER } from "../constants/vaultPaths";
+import { VAULT_CONFIG_DIR, DEFAULT_ATTACHMENT_FOLDER } from "../constants/vaultPaths";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 export { DEFAULT_ATTACHMENT_FOLDER };

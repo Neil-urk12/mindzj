@@ -4,6 +4,7 @@ import {
     destroyPluginView,
     activatePluginView,
 } from "../../stores/plugins";
+import { VAULT_CONFIG_DIR } from "../../constants/vaultPaths";
 
 // Plugin View Host — renders plugin-managed views for registered extensions
 // ============================================================================
@@ -22,8 +23,8 @@ export const PluginViewHost: Component<{
     let currentPath: string | null = null;
     let currentHandle: string | null = null;
     const isMindzjInternalFile = () =>
-        props.filePath.startsWith(".mindzj/") ||
-        props.filePath.includes("/.mindzj/");
+        props.filePath.startsWith(`${VAULT_CONFIG_DIR}/`) ||
+        props.filePath.includes(`/${VAULT_CONFIG_DIR}/`);
 
     // Only track path changes — ignore content changes.
     // Content changes from plugin saves must NOT trigger re-mount, because

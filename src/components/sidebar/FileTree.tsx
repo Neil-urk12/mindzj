@@ -9,6 +9,7 @@ import { displayName } from "../../utils/displayName";
 import { fetchBacklinks, updateBacklinksOnFileRename } from "../../utils/linkUpdater";
 import { openFileRouted } from "../../utils/openFileRouted";
 import { isMarkdownPath } from "../../utils/fileTypes";
+import { FILE_ORDER_PATH, FOLDER_STATE_PATH } from "../../constants/vaultPaths";
 import { t } from "../../i18n";
 
 type FolderVisibilityAction = "default" | "collapse" | "expand";
@@ -328,7 +329,7 @@ async function loadFileOrder(): Promise<void> {
     if (fileOrderLoaded) return;
     try {
         const r = await invoke<{ content: string }>("read_file", {
-            relativePath: ".mindzj/file-order.json",
+            relativePath: FILE_ORDER_PATH,
         });
         const parsed = JSON.parse(r.content);
         if (typeof parsed === "object" && parsed !== null) {
@@ -344,7 +345,7 @@ async function saveFileOrder(order: FileOrderMap): Promise<void> {
     setFileOrderMap(order);
     try {
         await invoke("write_file", {
-            relativePath: ".mindzj/file-order.json",
+            relativePath: FILE_ORDER_PATH,
             content: JSON.stringify(order, null, 2),
         });
     } catch (e) {
@@ -369,7 +370,7 @@ export async function loadFolderState(): Promise<void> {
     if (folderStateLoaded) return;
     try {
         const r = await invoke<{ content: string }>("read_file", {
-            relativePath: ".mindzj/folder-state.json",
+            relativePath: FOLDER_STATE_PATH,
         });
         const parsed = JSON.parse(r.content);
         if (typeof parsed === "object" && parsed !== null) {
@@ -385,7 +386,7 @@ export async function saveFolderState(): Promise<void> {
     const state = folderOpenState();
     try {
         await invoke("write_file", {
-            relativePath: ".mindzj/folder-state.json",
+            relativePath: FOLDER_STATE_PATH,
             content: JSON.stringify(state),
         });
     } catch (e) {
