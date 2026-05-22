@@ -1213,14 +1213,9 @@ export const Editor: Component<EditorProps> = (props) => {
                           },
                       ]
                     : []),
-                ...defaultKeymap,
-                ...historyKeymap,
-                // Redo: Ctrl+Shift+Z (, overrides default Ctrl+Y)
-                { key: "Mod-Shift-z", run: (v) => redo(v) },
-                ...searchKeymap,
-                ...foldKeymap,
-                ...closeBracketsKeymap,
-                // Formatting shortcuts
+                // Formatting shortcuts — before defaultKeymap so they
+                // take priority (e.g. Mod-i would otherwise hit
+                // selectParentSyntax from @codemirror/commands).
                 { key: "Mod-b", run: (v) => wrapSelection(v, "**") },
                 { key: "Mod-i", run: (v) => wrapSelection(v, "*") },
                 { key: "Mod-Shift-s", run: (v) => wrapSelection(v, "~~") },
@@ -1239,6 +1234,13 @@ export const Editor: Component<EditorProps> = (props) => {
                 { key: "Mod-6", run: (v) => setHeading(v, 6) },
                 // Ctrl+0 = remove heading (normal paragraph)
                 { key: "Mod-0", run: (v) => setHeading(v, 0) },
+                ...defaultKeymap,
+                ...historyKeymap,
+                // Redo: Ctrl+Shift+Z (, overrides default Ctrl+Y)
+                { key: "Mod-Shift-z", run: (v) => redo(v) },
+                ...searchKeymap,
+                ...foldKeymap,
+                ...closeBracketsKeymap,
                 // Ctrl+D: delete current line 
                 { key: "Mod-d", run: (v) => deleteLine(v) },
                 // Ctrl+Shift+K: also delete line (VS Code style)
