@@ -17,42 +17,28 @@ import {
   type MindzjNodeMatch,
   type MindzjTextPathInput,
 } from "../utils/mindzjMindmap";
-
-type ChatRole = "system" | "user" | "assistant" | "tool";
-
-interface ChatMessage {
-  role: ChatRole;
-  content?: string | null;
-  reasoning_content?: string | null;
-  tool_calls?: ToolCall[];
-  tool_call_id?: string;
-}
-
-interface ToolCall {
-  id: string;
-  type: "function";
-  function: {
-    name: string;
-    arguments: string;
-  };
-}
-
-interface ToolDefinition {
-  type: "function";
-  function: {
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  };
-}
-
+import type { ChatMessage, ToolCall, ToolDefinition } from "./ai/types";
+import {
+  inferProviderFamily,
+  isLocalProviderType,
+  normalizeProviderType,
+  providerBaseUrl,
+  resolveAdapterConfig,
+  PROVIDER_DEFAULTS,
+  providerNeedsRealKey,
+  configMatchesProvider,
+  providerStorageId,
+  formatAiProviderError,
+} from "./ai/router";
+import openAiAdapter, { normalizeAssistantMessageForHistory } from "./ai/openai";
+import anthropicAdapter from "./ai/anthropic";
+import geminiAdapter from "./ai/gemini";
 type ToolResult = {
   ok: boolean;
   message?: string;
   data?: unknown;
 };
 
-type AiProviderFamily = "openai-compatible" | "anthropic" | "gemini";
 type AiModelOption = { value: string; label: string };
 type AiTextToSpeechResult = { path: string; fileName: string };
 
@@ -98,89 +84,6 @@ export const GROK_TTS_LANGUAGE_OPTIONS: AiModelOption[] = [
   { value: "es-ES", label: "Spanish" },
 ];
 
-const PROVIDER_DEFAULTS: Record<AiProviderType, AiProviderConfig> = {
-  Ollama: {
-    id: null,
-    display_name: null,
-    provider_type: "Ollama",
-    endpoint: "http://localhost:11434/v1",
-    api_key: null,
-    has_api_key: false,
-    model: "llama3.2",
-  },
-  LMStudio: {
-    id: null,
-    display_name: null,
-    provider_type: "LMStudio",
-    endpoint: "http://localhost:1234/v1",
-    api_key: null,
-    has_api_key: false,
-    model: "local-model",
-  },
-  ApiKeyLLM: {
-    id: null,
-    display_name: null,
-    provider_type: "ApiKeyLLM",
-    endpoint: null,
-    api_key: null,
-    has_api_key: false,
-    model: "",
-  },
-  OpenAI: {
-    id: null,
-    display_name: "OpenAI",
-    provider_type: "OpenAI",
-    endpoint: "https://api.openai.com/v1",
-    api_key: null,
-    has_api_key: false,
-    model: "gpt-5.5",
-  },
-  Claude: {
-    id: null,
-    display_name: "Claude",
-    provider_type: "Claude",
-    endpoint: "https://api.anthropic.com/v1",
-    api_key: null,
-    has_api_key: false,
-    model: "claude-sonnet-4-6",
-  },
-  Grok: {
-    id: null,
-    display_name: "Grok",
-    provider_type: "Grok",
-    endpoint: "https://api.x.ai/v1",
-    api_key: null,
-    has_api_key: false,
-    model: "grok-4.20",
-  },
-  Gemini: {
-    id: null,
-    display_name: "Gemini",
-    provider_type: "Gemini",
-    endpoint: "https://generativelanguage.googleapis.com/v1beta",
-    api_key: null,
-    has_api_key: false,
-    model: "gemini-3-flash-preview",
-  },
-  DeepSeek: {
-    id: null,
-    display_name: "DeepSeek",
-    provider_type: "DeepSeek",
-    endpoint: "https://api.deepseek.com",
-    api_key: null,
-    has_api_key: false,
-    model: "deepseek-v4-pro",
-  },
-  Custom: {
-    id: null,
-    display_name: "Custom",
-    provider_type: "Custom",
-    endpoint: null,
-    api_key: null,
-    has_api_key: false,
-    model: "",
-  },
-};
 
 const BUILT_IN_MODEL_OPTIONS: Partial<Record<AiProviderType, AiModelOption[]>> = {
   OpenAI: [
@@ -218,9 +121,6 @@ function cloneConfig(config: AiProviderConfig): AiProviderConfig {
   return { ...config };
 }
 
-function normalizeProviderType(provider: AiProviderType): AiProviderType {
-  return provider in PROVIDER_DEFAULTS ? provider : "ApiKeyLLM";
-}
 
 export function isBuiltInOnlineProviderType(provider: AiProviderType): boolean {
   return (BUILT_IN_ONLINE_PROVIDER_TYPES as readonly string[]).includes(provider);
@@ -230,9 +130,6 @@ export function builtInModelOptions(provider: AiProviderType): AiModelOption[] {
   return BUILT_IN_MODEL_OPTIONS[normalizeProviderType(provider)] ?? [];
 }
 
-function isLocalProviderType(provider: AiProviderType): boolean {
-  return provider === "Ollama" || provider === "LMStudio";
-}
 
 function providerDisplayName(config: AiProviderConfig): string {
   const providerType = normalizeProviderType(config.provider_type);
@@ -284,104 +181,15 @@ function configuredGrokProvider(): AiProviderConfig {
     ?? defaultAiProviderConfig("Grok");
 }
 
-function providerBaseUrl(config: AiProviderConfig): string {
-  const providerType = normalizeProviderType(config.provider_type);
-  const fallback = !isLocalProviderType(providerType)
-    ? defaultApiKeyEndpoint(config)
-    : PROVIDER_DEFAULTS[providerType]?.endpoint ?? "";
-  const base = (config.endpoint || fallback || "").replace(/\/+$/, "");
-  if (inferProviderFamily(config) === "gemini") {
-    return base
-      .replace(/\/models\/[^/]+(?::(?:generateContent|streamGenerateContent))?$/i, "")
-      .replace(/\/models$/i, "");
-  }
-  return base;
-}
 
-function modelHint(config: AiProviderConfig): string {
-  return `${config.display_name ?? ""} ${config.model ?? ""}`.toLowerCase();
-}
 
-function inferProviderFamily(config: AiProviderConfig): AiProviderFamily {
-  const providerType = normalizeProviderType(config.provider_type);
-  if (providerType === "Claude") return "anthropic";
-  if (providerType === "Gemini") return "gemini";
-  const endpoint = (config.endpoint ?? "").toLowerCase();
-  const hint = modelHint(config);
-  if (endpoint.includes("anthropic.com")) return "anthropic";
-  if (endpoint.includes("generativelanguage.googleapis.com")) return "gemini";
-  if (endpoint) return "openai-compatible";
-  if (hint.includes("claude")) return "anthropic";
-  if (hint.includes("gemini")) return "gemini";
-  return "openai-compatible";
-}
 
-function defaultApiKeyEndpoint(config: AiProviderConfig): string {
-  const providerType = normalizeProviderType(config.provider_type);
-  const providerDefault = !isLocalProviderType(providerType)
-    ? PROVIDER_DEFAULTS[providerType]?.endpoint
-    : null;
-  if (providerDefault) return providerDefault;
-  const family = inferProviderFamily(config);
-  if (family === "anthropic") return "https://api.anthropic.com/v1";
-  if (family === "gemini") return "https://generativelanguage.googleapis.com/v1beta";
-  if (modelHint(config).includes("grok") || modelHint(config).includes("xai")) {
-    return "https://api.x.ai/v1";
-  }
-  if (modelHint(config).includes("deepseek")) return "https://api.deepseek.com";
-  return "https://api.openai.com/v1";
-}
 
-function isDeepSeekConfig(config: AiProviderConfig): boolean {
-  const providerType = normalizeProviderType(config.provider_type);
-  if (providerType === "DeepSeek") return true;
-  return providerBaseUrl(config).toLowerCase().includes("deepseek.com")
-    || modelHint(config).includes("deepseek");
-}
 
-function providerNeedsRealKey(provider: AiProviderType): boolean {
-  return !isLocalProviderType(normalizeProviderType(provider));
-}
 
-function configMatchesProvider(config: AiProviderConfig, provider: string): boolean {
-  const trimmed = provider.trim();
-  if (config.id) return config.id === trimmed;
-  return normalizeProviderType(config.provider_type) === trimmed;
-}
 
-function providerStorageId(config: AiProviderConfig): string {
-  return config.id || normalizeProviderType(config.provider_type);
-}
 
-function stripCopiedModelPath(value: string): string {
-  let model = value.trim().replace(/^["']|["']$/g, "");
-  if (!model) return "";
-  try {
-    if (/^https?:\/\//i.test(model)) {
-      const url = new URL(model);
-      model = url.pathname;
-    }
-  } catch {
-    // Keep the original value; the provider will report a precise error.
-  }
-  model = model
-    .replace(/[?#].*$/, "")
-    .replace(/^\/+|\/+$/g, "")
-    .replace(/:(?:generateContent|streamGenerateContent)$/i, "");
-  const modelsMatch = model.match(/(?:^|\/)models\/([^/:]+)$/i);
-  if (modelsMatch?.[1]) return modelsMatch[1];
-  return model;
-}
 
-function openAiCompatibleModelId(config: AiProviderConfig): string {
-  let model = stripCopiedModelPath(config.model).replace(/^models\//i, "");
-  const base = providerBaseUrl(config).toLowerCase();
-  const preserveProviderPrefix = base.includes("openrouter.ai");
-  if (!preserveProviderPrefix && model.includes("/")) {
-    model = model.split("/").filter(Boolean).pop() ?? model;
-  }
-  return model;
-}
 
 function flattenEntries(entries: VaultEntry[], result: Array<{ path: string; name: string; is_dir: boolean }> = []) {
   for (const entry of entries) {
@@ -1485,24 +1293,22 @@ async function chatCompletionRequest(
   apiKey: string | null,
   includeTools = true,
 ) {
+  const adapterConfig = resolveAdapterConfig(config, apiKey);
   const family = inferProviderFamily(config);
-  if (family === "anthropic") return chatCompletionAnthropic(config, messages, apiKey, includeTools);
-  if (family === "gemini") return chatCompletionGemini(config, messages, apiKey, includeTools);
-  return chatCompletionOpenAiCompatible(config, messages, apiKey, includeTools);
-}
-
-function authHeader(apiKey: string | null): Record<string, string> {
-  return apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
-}
-
-async function postAiJson(url: string, headers: Record<string, string>, body: unknown) {
-  try {
-    return await invoke<any>("ai_chat_completion", {
-      request: { url, headers, body },
-    });
-  } catch (error) {
-    throw new Error(formatAiProviderError(error));
-  }
+  const adapter = family === "anthropic"
+    ? anthropicAdapter
+    : family === "gemini"
+      ? geminiAdapter
+      : openAiAdapter;
+  const transport = async (url: string, headers: Record<string, string>, body: unknown) => {
+    try {
+      return await invoke("ai_chat_completion", { request: { url, headers, body } });
+    } catch (error: any) {
+      throw new Error(formatAiProviderError(error));
+    }
+  };
+  const tools = includeTools ? TOOLS : [];
+  return adapter.sendCompletion(messages, tools, adapterConfig, transport);
 }
 
 async function getAiJson(url: string, headers: Record<string, string>) {
@@ -1512,6 +1318,35 @@ async function getAiJson(url: string, headers: Record<string, string>) {
     });
   } catch (error) {
     throw new Error(formatAiProviderError(error));
+  }
+}
+
+async function listProviderModels(config: AiProviderConfig, apiKey: string | null): Promise<string[]> {
+  try {
+    const base = providerBaseUrl(config);
+    const family = inferProviderFamily(config);
+    const providerType = normalizeProviderType(config.provider_type);
+    const headers: Record<string, string> = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+
+    if (providerType === "Ollama") {
+      const data = await getAiJson(`${base}/api/tags`, {});
+      return Array.isArray(data?.models) ? data.models.map((m: any) => m.name ?? m.model ?? "").filter(Boolean) : [];
+    }
+
+    if (family === "anthropic") {
+      return [];
+    }
+
+    if (family === "gemini") {
+      const geminiHeaders: Record<string, string> = apiKey ? { "x-goog-api-key": apiKey } : {};
+      const data = await getAiJson(`${base}/models`, geminiHeaders);
+      return Array.isArray(data?.models) ? data.models.map((m: any) => (m.name ?? "").replace(/^models\//, "")).filter(Boolean) : [];
+    }
+
+    const data = await getAiJson(`${base}/models`, headers);
+    return Array.isArray(data?.data) ? data.data.map((m: any) => m.id ?? "").filter(Boolean) : [];
+  } catch {
+    return [];
   }
 }
 
@@ -1566,342 +1401,6 @@ function audioExportFileName(): string {
   ].join("");
 }
 
-function parseProviderErrorPayload(raw: string): { status?: string; message: string; code?: string; type?: string; param?: string | null } {
-  const trimmed = raw.trim();
-  const match = trimmed.match(/^(\d{3})(?::\s*)?([\s\S]*)$/);
-  const status = match?.[1];
-  const body = (match?.[2] ?? trimmed).trim();
-  if (!body) return { status, message: trimmed };
-  try {
-    const parsed = JSON.parse(body);
-    const error = parsed?.error ?? parsed;
-    return {
-      status,
-      message: String(error?.message ?? parsed?.message ?? body),
-      code: error?.code != null ? String(error.code) : parsed?.code != null ? String(parsed.code) : undefined,
-      type: error?.type != null ? String(error.type) : undefined,
-      param: error?.param ?? null,
-    };
-  } catch {
-    const message = body
-      .replace(/^\{|\}$/g, "")
-      .replace(/\bmessage\s*:\s*/i, "")
-      .replace(/\bstatus\s*:\s*/i, "status: ")
-      .trim();
-    return { status, message: message || trimmed };
-  }
-}
-
-function formatAiProviderError(error: any): string {
-  const raw = String(error?.message ?? error ?? "").trim();
-  const payload = parseProviderErrorPayload(raw);
-  const lower = payload.message.toLowerCase();
-  const status = payload.status ? `${payload.status}: ` : "";
-  let hint = "";
-  if (lower.includes("generatecontentrequest.model") || lower.includes("unexpected model name format")) {
-    hint = " Gemini 模型名格式不正确。请填写类似 gemini-1.5-flash、gemini-2.0-flash 或 models/gemini-2.0-flash 的模型名，不要填写完整 URL。";
-  } else if (lower.includes("invalid model id") || lower.includes("invalid model")) {
-    hint = " 模型 ID 无效。请确认模型名、API Key 和 endpoint 属于同一家服务；OpenAI/xAI 通常不要使用 models/ 前缀。";
-  }
-  return `${status}${payload.message}${hint}`.trim();
-}
-
-function parseModelIds(data: any): string[] {
-  const raw = Array.isArray(data?.data)
-    ? data.data
-    : Array.isArray(data?.models)
-      ? data.models
-      : Array.isArray(data)
-        ? data
-        : [];
-  const ids = raw
-    .map((item: any) => {
-      if (typeof item === "string") return item;
-      return String(item?.id ?? item?.name ?? item?.model ?? "").trim();
-    })
-    .filter(Boolean);
-  return Array.from(new Set(ids));
-}
-
-async function listProviderModels(config: AiProviderConfig, apiKey: string | null): Promise<string[]> {
-  const data = await getAiJson(`${providerBaseUrl(config)}/models`, authHeader(apiKey));
-  return parseModelIds(data);
-}
-
-async function chatCompletionOpenAiCompatible(
-  config: AiProviderConfig,
-  messages: ChatMessage[],
-  apiKey: string | null,
-  includeTools = true,
-) {
-  return postAiJson(
-    `${providerBaseUrl(config)}/chat/completions`,
-    authHeader(apiKey),
-    {
-      model: openAiCompatibleModelId(config),
-      messages,
-      ...(includeTools ? { tools: TOOLS, tool_choice: "auto" } : {}),
-    },
-  );
-}
-
-function normalizeAssistantMessageForHistory(message: any, config: AiProviderConfig): ChatMessage {
-  const result: ChatMessage = {
-    role: "assistant",
-    content: message.content ?? null,
-    tool_calls: message.tool_calls,
-  };
-  if (isDeepSeekConfig(config) && typeof message.reasoning_content === "string") {
-    result.reasoning_content = message.reasoning_content;
-  }
-  return result;
-}
-
-function anthropicToolDefinitions() {
-  return TOOLS.map((tool) => ({
-    name: tool.function.name,
-    description: tool.function.description,
-    input_schema: tool.function.parameters,
-  }));
-}
-
-function anthropicMessages(messages: ChatMessage[]) {
-  const system: string[] = [];
-  const result: any[] = [];
-  let pendingToolResults: any[] = [];
-
-  const flushToolResults = () => {
-    if (!pendingToolResults.length) return;
-    result.push({ role: "user", content: pendingToolResults });
-    pendingToolResults = [];
-  };
-
-  for (const message of messages) {
-    if (message.role === "system") {
-      if (message.content) system.push(message.content);
-      continue;
-    }
-    if (message.role === "user") {
-      flushToolResults();
-      result.push({ role: "user", content: message.content ?? "" });
-      continue;
-    }
-    if (message.role === "assistant") {
-      flushToolResults();
-      const content: any[] = [];
-      if (message.content) content.push({ type: "text", text: message.content });
-      for (const call of message.tool_calls ?? []) {
-        content.push({
-          type: "tool_use",
-          id: call.id,
-          name: call.function.name,
-          input: parseJsonObject(call.function.arguments) ?? {},
-        });
-      }
-      result.push({ role: "assistant", content: content.length ? content : "" });
-      continue;
-    }
-    if (message.role === "tool" && message.tool_call_id) {
-      const parsed = message.content ? parseJsonObject(message.content) : null;
-      pendingToolResults.push({
-        type: "tool_result",
-        tool_use_id: message.tool_call_id,
-        content: message.content ?? "",
-        ...(parsed?.ok === false ? { is_error: true } : {}),
-      });
-    }
-  }
-  flushToolResults();
-
-  return { system: system.join("\n\n"), messages: result };
-}
-
-function normalizeAnthropicResponse(data: any) {
-  const parts = Array.isArray(data?.content) ? data.content : [];
-  const text = parts
-    .filter((part: any) => part?.type === "text" && typeof part.text === "string")
-    .map((part: any) => part.text)
-    .join("\n")
-    .trim();
-  const toolCalls = parts
-    .filter((part: any) => part?.type === "tool_use" && part.name)
-    .map((part: any, index: number) => ({
-      id: String(part.id ?? `anthropic-tool-${index}`),
-      type: "function" as const,
-      function: {
-        name: String(part.name),
-        arguments: JSON.stringify(part.input ?? {}),
-      },
-    }));
-  return {
-    choices: [{
-      message: {
-        content: text || null,
-        tool_calls: toolCalls.length ? toolCalls : undefined,
-      },
-    }],
-  };
-}
-
-async function chatCompletionAnthropic(
-  config: AiProviderConfig,
-  messages: ChatMessage[],
-  apiKey: string | null,
-  includeTools = true,
-) {
-  if (!apiKey) throw new Error("API key is required for this provider.");
-  const converted = anthropicMessages(messages);
-  const data = await postAiJson(
-    `${providerBaseUrl(config)}/messages`,
-    {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    {
-      model: config.model,
-      max_tokens: 4096,
-      messages: converted.messages,
-      ...(converted.system ? { system: converted.system } : {}),
-      ...(includeTools ? { tools: anthropicToolDefinitions() } : {}),
-    },
-  );
-  return normalizeAnthropicResponse(data);
-}
-
-function toGeminiSchema(value: any): any {
-  if (Array.isArray(value)) return value.map(toGeminiSchema);
-  if (!value || typeof value !== "object") return value;
-  const result: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (key === "additionalProperties") continue;
-    result[key] = key === "type" && typeof entry === "string"
-      ? entry.toUpperCase()
-      : toGeminiSchema(entry);
-  }
-  return result;
-}
-
-function geminiToolDefinitions() {
-  return [{
-    functionDeclarations: TOOLS.map((tool) => ({
-      name: tool.function.name,
-      description: tool.function.description,
-      parameters: toGeminiSchema(tool.function.parameters),
-    })),
-  }];
-}
-
-function geminiModelPath(model: string): string {
-  let id = stripCopiedModelPath(model)
-    .replace(/^models\//i, "")
-    .replace(/^(?:google|gemini)\//i, "");
-  if (id.includes("/")) {
-    const last = id.split("/").filter(Boolean).pop();
-    if (last?.toLowerCase().startsWith("gemini-")) id = last;
-  }
-  return `models/${id}`;
-}
-
-function geminiMessages(messages: ChatMessage[]) {
-  const systemParts: Array<{ text: string }> = [];
-  const contents: any[] = [];
-  const toolNames = new Map<string, string>();
-
-  for (const message of messages) {
-    if (message.role === "system") {
-      if (message.content) systemParts.push({ text: message.content });
-      continue;
-    }
-    if (message.role === "user") {
-      contents.push({ role: "user", parts: [{ text: message.content ?? "" }] });
-      continue;
-    }
-    if (message.role === "assistant") {
-      const parts: any[] = [];
-      if (message.content) parts.push({ text: message.content });
-      for (const call of message.tool_calls ?? []) {
-        toolNames.set(call.id, call.function.name);
-        parts.push({
-          functionCall: {
-            name: call.function.name,
-            args: parseJsonObject(call.function.arguments) ?? {},
-          },
-        });
-      }
-      contents.push({ role: "model", parts: parts.length ? parts : [{ text: "" }] });
-      continue;
-    }
-    if (message.role === "tool" && message.tool_call_id) {
-      const toolName = toolNames.get(message.tool_call_id) ?? "tool_result";
-      const parsed = message.content ? parseJsonObject(message.content) : null;
-      contents.push({
-        role: "user",
-        parts: [{
-          functionResponse: {
-            name: toolName,
-            response: parsed ?? { content: message.content ?? "" },
-          },
-        }],
-      });
-    }
-  }
-
-  return {
-    systemInstruction: systemParts.length ? { parts: systemParts } : undefined,
-    contents,
-  };
-}
-
-function normalizeGeminiResponse(data: any) {
-  const parts = data?.candidates?.[0]?.content?.parts ?? [];
-  const text = parts
-    .filter((part: any) => typeof part?.text === "string")
-    .map((part: any) => part.text)
-    .join("\n")
-    .trim();
-  const toolCalls = parts
-    .filter((part: any) => part?.functionCall?.name)
-    .map((part: any, index: number) => ({
-      id: `gemini-tool-${index}`,
-      type: "function" as const,
-      function: {
-        name: String(part.functionCall.name),
-        arguments: JSON.stringify(part.functionCall.args ?? {}),
-      },
-    }));
-  return {
-    choices: [{
-      message: {
-        content: text || null,
-        tool_calls: toolCalls.length ? toolCalls : undefined,
-      },
-    }],
-  };
-}
-
-async function chatCompletionGemini(
-  config: AiProviderConfig,
-  messages: ChatMessage[],
-  apiKey: string | null,
-  includeTools = true,
-) {
-  if (!apiKey) throw new Error("API key is required for this provider.");
-  const converted = geminiMessages(messages);
-  const data = await postAiJson(
-    `${providerBaseUrl(config)}/${geminiModelPath(config.model)}:generateContent`,
-    { "x-goog-api-key": apiKey },
-    {
-      ...converted,
-      ...(includeTools
-        ? {
-            tools: geminiToolDefinitions(),
-            toolConfig: { functionCallingConfig: { mode: "AUTO" } },
-          }
-        : {}),
-    },
-  );
-  return normalizeGeminiResponse(data);
-}
 
 async function runJsonFallback(content: string, context?: ToolExecutionContext): Promise<string | null> {
   const parsed = parseJsonObject(content);
@@ -1918,7 +1417,7 @@ async function runJsonFallback(content: string, context?: ToolExecutionContext):
 
 function createAiStore() {
   async function getApiKey(config: AiProviderConfig): Promise<string | null> {
-    if (!providerNeedsRealKey(config.provider_type)) return null;
+    if (!providerNeedsRealKey(config)) return null;
     const value = config.api_key?.trim();
     if (value) return value;
     const provider = providerStorageId(config);
@@ -1934,7 +1433,7 @@ function createAiStore() {
     const value = apiKey.trim();
     const hasApiKey = value.length > 0;
     const updateConfig = (config: AiProviderConfig): AiProviderConfig =>
-      configMatchesProvider(config, provider)
+      configMatchesProvider(config, provider, null)
         ? { ...config, api_key: value || null, has_api_key: hasApiKey }
         : config;
     const current = settingsStore.settings();
@@ -1952,7 +1451,7 @@ function createAiStore() {
   function isConfigured(): boolean {
     const config = configuredProvider();
     if (!config?.model || !providerBaseUrl(config)) return false;
-    return !providerNeedsRealKey(config.provider_type) || config.has_api_key;
+    return !providerNeedsRealKey(config) || config.has_api_key;
   }
 
   function currentModelLabel(): string {
@@ -1964,7 +1463,7 @@ function createAiStore() {
     if (!providerBaseUrl(config)) throw new Error("AI endpoint is empty.");
 
     const apiKey = await getApiKey(config);
-    if (providerNeedsRealKey(config.provider_type)) {
+    if (providerNeedsRealKey(config)) {
       if (!config.model.trim()) throw new Error("AI model is empty.");
       if (!config.has_api_key || !apiKey) throw new Error("API key is required for this provider.");
       const data = await chatCompletionRequest(
@@ -1996,12 +1495,12 @@ function createAiStore() {
     if (!config) throw new Error("AI provider is not configured.");
     if (!config.model.trim()) throw new Error("AI model is empty.");
     if (!providerBaseUrl(config)) throw new Error("AI endpoint is empty.");
-    if (providerNeedsRealKey(config.provider_type) && !config.has_api_key) {
+    if (providerNeedsRealKey(config) && !config.has_api_key) {
       throw new Error("API key is required for this provider.");
     }
 
     const apiKey = await getApiKey(config);
-    if (providerNeedsRealKey(config.provider_type) && !apiKey) {
+    if (providerNeedsRealKey(config) && !apiKey) {
       throw new Error("API key is required for this provider.");
     }
     await editorStore.flushAllPendingSaves();
@@ -2019,7 +1518,7 @@ function createAiStore() {
       const message = choice?.message;
       const finishReason = String(choice?.finish_reason ?? "");
       if (!message) throw new Error("AI provider returned an empty response.");
-      messages.push(normalizeAssistantMessageForHistory(message, config));
+      messages.push(normalizeAssistantMessageForHistory(message as ChatMessage, config));
 
       const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls as ToolCall[] : [];
       if (toolCalls.length > 0) {
@@ -2083,7 +1582,7 @@ function createAiStore() {
     if (!apiKey) throw new Error("Grok API key is required for speech-to-text.");
     const data = await postAiAudioTranscription(
       `${providerBaseUrl(config)}/stt`,
-      authHeader(apiKey),
+      { Authorization: `Bearer ${apiKey}` },
       fileName,
       mimeType || "audio/wav",
       base64Data,
@@ -2104,7 +1603,7 @@ function createAiStore() {
     const language = settings.ai_tts_language?.trim() || "auto";
     return postAiTextToSpeech(
       `${providerBaseUrl(config)}/tts`,
-      authHeader(apiKey),
+      { Authorization: `Bearer ${apiKey}` },
       {
         text: input,
         voice_id: voice,
