@@ -85,3 +85,17 @@ export function parseJsonObject(value: string): any | null {
     return null;
   }
 }
+
+/** Result type returned by tool execution handlers */
+export type ToolResult = {
+  ok: boolean;
+  message?: string;
+  data?: unknown;
+};
+
+/** Context passed to tool execution to enforce active-file restrictions */
+export interface ToolExecutionContext {
+  restrictToActiveFile: boolean;
+  activePath: string | null;
+  hasExplicitPath: boolean;
+}
