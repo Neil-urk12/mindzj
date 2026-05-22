@@ -79,288 +79,81 @@ function getCurrentMarkdownViewCompat(): any | null {
 }
 export { getCurrentMarkdownViewCompat };
 
+// [id, name, command] — dispatched via mindzj:editor-command
+const EDITOR_COMMANDS: [string, string, string][] = [
+    ["editor:toggle-bold", "Bold", "bold"],
+    ["editor:toggle-italics", "Italic", "italic"],
+    ["editor:toggle-strikethrough", "Strikethrough", "strikethrough"],
+    ["editor:toggle-underline", "Underline", "underline"],
+    ["editor:toggle-highlight", "Highlight", "highlight"],
+    ["editor:toggle-code", "Inline code", "code"],
+    ["editor:toggle-blockquote", "Blockquote", "quote"],
+    ["editor:toggle-checklist-status", "Checklist status", "toggle-checklist-status"],
+    ["editor:toggle-bullet-list", "Bullet list", "bullet-list"],
+    ["editor:toggle-numbered-list", "Numbered list", "numbered-list"],
+    ["editor:toggle-comments", "Comment", "toggle-comment"],
+    ["editor:insert-link", "Insert link", "link"],
+    ["editor:insert-tag", "Insert tag", "tag"],
+    ["editor:insert-wikilink", "Insert wikilink", "wikilink"],
+    ["editor:insert-embed", "Insert embed", "embed"],
+    ["editor:insert-callout", "Insert callout", "callout"],
+    ["editor:insert-mathblock", "Insert math block", "mathblock"],
+    ["editor:insert-table", "Insert table", "table"],
+    ["editor:swap-line-up", "Swap line up", "move-line-up"],
+    ["editor:swap-line-down", "Swap line down", "move-line-down"],
+    ["editor:clear-formatting", "Clear formatting", "clear-formatting"],
+];
+
+// [id, name, level] — dispatched via mindzj:editor-command with heading level
+const HEADING_COMMANDS: [string, string, number][] = [
+    ["editor:set-heading-1", "Heading 1", 1],
+    ["editor:set-heading-2", "Heading 2", 2],
+    ["editor:set-heading-3", "Heading 3", 3],
+    ["editor:set-heading-4", "Heading 4", 4],
+    ["editor:set-heading-5", "Heading 5", 5],
+    ["editor:set-heading-6", "Heading 6", 6],
+];
+
 function getBuiltinCommands(): CommandEntry[] {
-    return [
+    const commands: CommandEntry[] = [];
+
+    for (const [id, name, command] of EDITOR_COMMANDS) {
+        commands.push({
+            id,
+            name,
+            callback: () =>
+                void document.dispatchEvent(
+                    new CustomEvent("mindzj:editor-command", {
+                        detail: { command },
+                    }),
+                ),
+        });
+    }
+
+    for (const [id, name, level] of HEADING_COMMANDS) {
+        commands.push({
+            id,
+            name,
+            callback: () =>
+                void document.dispatchEvent(
+                    new CustomEvent("mindzj:editor-command", {
+                        detail: { command: "heading", level },
+                    }),
+                ),
+        });
+    }
+
+    commands.push(
         {
             id: "editor:focus",
             name: "Focus editor",
             callback: () => getCurrentEditorCompat()?.focus?.(),
         },
         {
-            id: "editor:toggle-bold",
-            name: "Bold",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "bold" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:toggle-italics",
-            name: "Italic",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "italic" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:toggle-strikethrough",
-            name: "Strikethrough",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "strikethrough" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:toggle-underline",
-            name: "Underline",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "underline" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:toggle-highlight",
-            name: "Highlight",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "highlight" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:toggle-code",
-            name: "Inline code",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "code" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:toggle-blockquote",
-            name: "Blockquote",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "quote" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:toggle-checklist-status",
-            name: "Checklist status",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "toggle-checklist-status" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:toggle-bullet-list",
-            name: "Bullet list",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "bullet-list" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:toggle-numbered-list",
-            name: "Numbered list",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "numbered-list" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:toggle-comments",
-            name: "Comment",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "toggle-comment" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:insert-link",
-            name: "Insert link",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "link" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:insert-tag",
-            name: "Insert tag",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "tag" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:insert-wikilink",
-            name: "Insert wikilink",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "wikilink" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:insert-embed",
-            name: "Insert embed",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "embed" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:insert-callout",
-            name: "Insert callout",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "callout" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:insert-mathblock",
-            name: "Insert math block",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "mathblock" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:insert-table",
-            name: "Insert table",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "table" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:swap-line-up",
-            name: "Swap line up",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "move-line-up" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:swap-line-down",
-            name: "Swap line down",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "move-line-down" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:clear-formatting",
-            name: "Clear formatting",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "clear-formatting" },
-                    }),
-                ),
-        },
-        {
-            id: "editor:set-heading-1",
-            name: "Heading 1",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "heading", level: 1 },
-                    }),
-                ),
-        },
-        {
-            id: "editor:set-heading-2",
-            name: "Heading 2",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "heading", level: 2 },
-                    }),
-                ),
-        },
-        {
-            id: "editor:set-heading-3",
-            name: "Heading 3",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "heading", level: 3 },
-                    }),
-                ),
-        },
-        {
-            id: "editor:set-heading-4",
-            name: "Heading 4",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "heading", level: 4 },
-                    }),
-                ),
-        },
-        {
-            id: "editor:set-heading-5",
-            name: "Heading 5",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "heading", level: 5 },
-                    }),
-                ),
-        },
-        {
-            id: "editor:set-heading-6",
-            name: "Heading 6",
-            callback: () =>
-                document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "heading", level: 6 },
-                    }),
-                ),
-        },
-        {
             id: "app:toggle-left-sidebar",
             name: "Toggle left sidebar",
             callback: () =>
-                document.dispatchEvent(
+                void document.dispatchEvent(
                     new CustomEvent("mindzj:app-command", {
                         detail: { command: "toggle-left-sidebar" },
                     }),
@@ -370,13 +163,15 @@ function getBuiltinCommands(): CommandEntry[] {
             id: "app:toggle-right-sidebar",
             name: "Toggle right sidebar",
             callback: () =>
-                document.dispatchEvent(
+                void document.dispatchEvent(
                     new CustomEvent("mindzj:app-command", {
                         detail: { command: "toggle-right-sidebar" },
                     }),
                 ),
         },
-    ];
+    );
+
+    return commands;
 }
 
 function getAllCommands(): CommandEntry[] {
