@@ -1,3 +1,4 @@
+pub mod ai_proxy;
 pub mod plugin_api;
 pub mod screenshot_api;
 pub mod search_api;
