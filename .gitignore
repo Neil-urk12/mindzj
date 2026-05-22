@@ -29,6 +29,7 @@ Thumbs.db
 
 # Tauri
 src-tauri/WixTools/
+src-tauri/gen/
 
 # NOTE: src-tauri/icons/ is INTENTIONALLY committed to the repo.
 # The release workflow (.github/workflows/release.yml) runs on
@@ -46,3 +47,4 @@ src-tauri/icons/ios/
 
 # Test coverage
 coverage/
+.gitnexus
