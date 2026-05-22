@@ -40,112 +40,18 @@ import {
     EditorView,
     ViewPlugin,
     ViewUpdate,
-    WidgetType,
 } from "@codemirror/view";
 import { Range, StateField, Transaction } from "@codemirror/state";
 import {
     getContinuationInfo,
-    LIST_INDENT_EXTRA_PX,
-    LIST_INDENT_WIDTH,
-    LIST_RENDER_TAB_SIZE,
+    bulletWidget,
+    orderedMarkerDeco,
+    listContentDeco,
+    listGuideDeco,
+    listWrapDeco,
+    syncListGuideMetrics,
+    listSharedTheme,
 } from "./listUtils";
-
-// ---------------------------------------------------------------------------
-// Widgets
-// ---------------------------------------------------------------------------
-
-/**
- * Small round bullet that replaces `-` / `*` / `+` on non-cursor
- * unordered-list lines. Non-atomic (inline-replace, not block) so
- * arrow-key motion through the line stays on a character-by-character
- * grid — the caret just steps over the widget.
- */
-class BulletWidget extends WidgetType {
-    toDOM(): HTMLElement {
-        const anchor = document.createElement("span");
-        anchor.className = "mz-lp-bullet-anchor";
-        const dot = document.createElement("span");
-        dot.className = "mz-lp-bullet";
-        anchor.appendChild(dot);
-        return anchor;
-    }
-    eq(): boolean {
-        return true;
-    }
-}
-const bulletWidget = new BulletWidget();
-
-// ---------------------------------------------------------------------------
-// Decoration definitions
-// ---------------------------------------------------------------------------
-
-const orderedMarkerDeco = Decoration.mark({ class: "mz-lp-ordered-marker" });
-const listContentDeco = Decoration.mark({ class: "mz-lp-list-content" });
-
-function listGuideDeco(level: number): Decoration {
-    return Decoration.line({
-        class: "mz-lp-list-guides",
-        attributes: {
-            style: `--mz-list-level: ${level};`,
-        },
-    });
-}
-
-function listWrapDeco(level: number, markerChars: number): Decoration {
-    return Decoration.line({
-        class: "mz-list-wrap-line",
-        attributes: {
-            style: `--mz-list-wrap-tabs: ${level}; --mz-list-wrap-marker: ${markerChars};`,
-        },
-    });
-}
-
-// ---------------------------------------------------------------------------
-// Indent measurement helpers
-// ---------------------------------------------------------------------------
-
-function measureListIndentWidth(view: EditorView): number {
-    if (typeof document === "undefined") {
-        return LIST_INDENT_WIDTH * 8 + LIST_INDENT_EXTRA_PX;
-    }
-
-    const probe = document.createElement("span");
-    probe.textContent = "\t";
-    probe.style.position = "absolute";
-    probe.style.visibility = "hidden";
-    probe.style.pointerEvents = "none";
-    probe.style.whiteSpace = "pre";
-    probe.style.padding = "0";
-    probe.style.margin = "0";
-    probe.style.border = "0";
-    probe.style.font = getComputedStyle(view.contentDOM).font;
-    probe.style.tabSize = `${LIST_RENDER_TAB_SIZE}`;
-    probe.style.setProperty("-moz-tab-size", `${LIST_RENDER_TAB_SIZE}`);
-    view.contentDOM.appendChild(probe);
-    const measured = probe.getBoundingClientRect().width;
-    probe.remove();
-    if (Number.isFinite(measured) && measured > 0) {
-        return measured + LIST_INDENT_EXTRA_PX;
-    }
-
-    return (
-        Math.max(1, view.defaultCharacterWidth) * LIST_INDENT_WIDTH +
-        LIST_INDENT_EXTRA_PX
-    );
-}
-
-function syncListGuideMetrics(view: EditorView): void {
-    const rawIndentWidth = Math.max(40, Math.round(measureListIndentWidth(view)));
-    const indentWidth = rawIndentWidth % 2 === 0 ? rawIndentWidth : rawIndentWidth + 1;
-    const guideOffset = Math.max(1, indentWidth / 2);
-    view.contentDOM.style.setProperty("tab-size", `${indentWidth}px`);
-    view.contentDOM.style.setProperty("-moz-tab-size", `${indentWidth}px`);
-    view.contentDOM.style.setProperty("--mz-list-indent-step", `${indentWidth}px`);
-    view.contentDOM.style.setProperty(
-        "--mz-list-guide-offset",
-        `${guideOffset}px`,
-    );
-}
 
 // ---------------------------------------------------------------------------
 // Line-level decorations (StateField) — listWrapDeco + listGuideDeco
@@ -351,37 +257,10 @@ function createListStylePlugin() {
 // its bundle, so it gets the styles too.)
 // ---------------------------------------------------------------------------
 
-const listStyleTheme = EditorView.baseTheme({
-    // Anchor width is `1ch` — the exact width of the `-` character it
-    // replaces. Keep the dot centered in that marker cell so it lines
-    // up with the source `-` and the list guide background.
-    ".mz-lp-bullet-anchor": {
-        display: "inline-block",
-        width: "1ch",
-        height: "1em",
-        position: "relative",
-        verticalAlign: "middle",
-    },
-    ".mz-lp-bullet": {
-        position: "absolute",
-        left: "0.5ch",
-        top: "50%",
-        width: "0.3em",
-        height: "0.3em",
-        borderRadius: "999px",
-        background: "var(--mz-text-muted)",
-        transform: "translate(-50%, -50%)",
-        pointerEvents: "none",
-    },
-    ".mz-lp-ordered-marker": {
-        color: "var(--mz-text-muted)",
-    },
-});
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 export function listStyleExtension() {
-    return [listStyleTheme, listLineDecorationField, createListStylePlugin()];
+    return [listSharedTheme, listLineDecorationField, createListStylePlugin()];
 }
