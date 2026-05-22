@@ -42,9 +42,13 @@ import { URL_REGEX, trimTrailingPunct } from "../../../utils/autoLink";
 import { settingsStore } from "../../../stores/settings";
 import {
     getContinuationInfo,
-    LIST_INDENT_EXTRA_PX,
-    LIST_INDENT_WIDTH,
-    LIST_RENDER_TAB_SIZE,
+    bulletWidget,
+    orderedMarkerDeco,
+    listContentDeco,
+    listGuideDeco,
+    listWrapDeco,
+    syncListGuideMetrics,
+    listSharedTheme,
 } from "./listUtils";
 import { t } from "../../../i18n";
 
@@ -485,26 +489,6 @@ class CheckboxWidget extends WidgetType {
     }
 }
 
-/**
- * Tiny widget that renders the unordered-list marker (`-`, `*`, `+`) as
- * a round bullet. Inline (non-block) replace, so CM6 doesn't treat it
- * as atomic — arrow keys can move normally through the line.
- */
-class BulletWidget extends WidgetType {
-    toDOM(): HTMLElement {
-        const anchor = document.createElement("span");
-        anchor.className = "mz-lp-bullet-anchor";
-        const dot = document.createElement("span");
-        dot.className = "mz-lp-bullet";
-        anchor.appendChild(dot);
-        return anchor;
-    }
-    eq(): boolean {
-        return true;
-    }
-}
-const bulletWidget = new BulletWidget();
-
 /** Inline math widget rendered with KaTeX */
 class InlineMathWidget extends WidgetType {
     constructor(private tex: string) {
@@ -582,8 +566,6 @@ const italicDeco = Decoration.mark({ class: "mz-lp-italic" });
 const strikethroughDeco = Decoration.mark({ class: "mz-lp-strikethrough" });
 const highlightDeco = Decoration.mark({ class: "mz-lp-highlight" });
 const inlineCodeDeco = Decoration.mark({ class: "mz-lp-inline-code" });
-const orderedMarkerDeco = Decoration.mark({ class: "mz-lp-ordered-marker" });
-const listContentDeco = Decoration.mark({ class: "mz-lp-list-content" });
 const linkDeco = Decoration.mark({ class: "mz-lp-link" });
 // linkUrlDeco removed — link URLs are hidden in preview
 // Blockquote + HR: same reasoning as headings — use line decorations so
@@ -591,73 +573,6 @@ const linkDeco = Decoration.mark({ class: "mz-lp-link" });
 // clicks map to the correct source line.
 const blockquoteLineDeco = Decoration.line({ class: "mz-lp-blockquote-line" });
 const hrLineDeco = Decoration.line({ class: "mz-lp-hr-line" });
-function listGuideDeco(level: number): Decoration {
-    return Decoration.line({
-        class: "mz-lp-list-guides",
-        attributes: {
-            style: `--mz-list-level: ${level};`,
-        },
-    });
-}
-
-function listWrapDeco(level: number, markerChars: number): Decoration {
-    return Decoration.line({
-        class: "mz-list-wrap-line",
-        attributes: {
-            style: `--mz-list-wrap-tabs: ${level}; --mz-list-wrap-marker: ${markerChars};`,
-        },
-    });
-}
-
-function measureListIndentWidth(view: EditorView): number {
-    if (typeof document === "undefined") {
-        return LIST_INDENT_WIDTH * 8 + LIST_INDENT_EXTRA_PX;
-    }
-
-    const probe = document.createElement("span");
-    probe.textContent = "\t";
-    probe.style.position = "absolute";
-    probe.style.visibility = "hidden";
-    probe.style.pointerEvents = "none";
-    probe.style.whiteSpace = "pre";
-    probe.style.padding = "0";
-    probe.style.margin = "0";
-    probe.style.border = "0";
-    probe.style.font = getComputedStyle(view.contentDOM).font;
-    probe.style.tabSize = `${LIST_RENDER_TAB_SIZE}`;
-    probe.style.setProperty("-moz-tab-size", `${LIST_RENDER_TAB_SIZE}`);
-    view.contentDOM.appendChild(probe);
-    const measured = probe.getBoundingClientRect().width;
-    probe.remove();
-    if (Number.isFinite(measured) && measured > 0) {
-        return measured + LIST_INDENT_EXTRA_PX;
-    }
-
-    return (
-        Math.max(1, view.defaultCharacterWidth) * LIST_INDENT_WIDTH +
-        LIST_INDENT_EXTRA_PX
-    );
-}
-
-function syncListGuideMetrics(view: EditorView) {
-    const rawIndentWidth = Math.max(
-        40,
-        Math.round(measureListIndentWidth(view)),
-    );
-    const indentWidth =
-        rawIndentWidth % 2 === 0 ? rawIndentWidth : rawIndentWidth + 1;
-    const guideOffset = Math.max(1, indentWidth / 2);
-    view.contentDOM.style.setProperty("tab-size", `${indentWidth}px`);
-    view.contentDOM.style.setProperty("-moz-tab-size", `${indentWidth}px`);
-    view.contentDOM.style.setProperty(
-        "--mz-list-indent-step",
-        `${indentWidth}px`,
-    );
-    view.contentDOM.style.setProperty(
-        "--mz-list-guide-offset",
-        `${guideOffset}px`,
-    );
-}
 
 function eventTargetElement(target: EventTarget | null): Element | null {
     if (target instanceof Element) return target;
@@ -2160,41 +2075,6 @@ const livePreviewTheme = EditorView.baseTheme({
         borderBottom: "1px solid var(--mz-border)",
     },
 
-    // Rendered bullet marker for unordered list items. The underlying
-    // `-` / `*` / `+` char is inline-replaced with this widget on
-    // non-cursor lines; when the cursor enters the line the real
-    // character is visible again for editing.
-    //
-    // Width is `1ch` — the exact width of the `-` character it
-    // replaces — so the visual flow matches both (a) the cursor-line
-    // version of the same line (where the raw `-` is visible) and (b)
-    // the `markerChars * 1ch` allocation the `.mz-list-wrap-line`
-    // hanging-indent CSS carves out for marker+space. If the anchor
-    // were wider than 1ch the content's inline-block would overflow
-    // and push "abc" onto the next visual line.
-    ".mz-lp-bullet-anchor": {
-        display: "inline-block",
-        width: "1ch",
-        height: "1em",
-        position: "relative",
-        verticalAlign: "middle",
-    },
-    // Center the rendered dot inside the same `1ch` marker cell used by
-    // the raw `-` character and by the list guide background.
-    ".mz-lp-bullet": {
-        position: "absolute",
-        left: "0.5ch",
-        top: "50%",
-        width: "0.3em",
-        height: "0.3em",
-        borderRadius: "999px",
-        background: "var(--mz-text-muted)",
-        transform: "translate(-50%, -50%)",
-        pointerEvents: "none",
-    },
-    ".mz-lp-ordered-marker": {
-        color: "var(--mz-text-muted)",
-    },
     ".mz-lp-bold": {
         fontWeight: "700",
     },
@@ -2546,6 +2426,7 @@ export function livePreviewExtension(
     currentFilePath: string,
 ) {
     return [
+        listSharedTheme,
         livePreviewTheme,
         listLineBoundaryClickHandler,
         horizontalRuleClickHandler,
