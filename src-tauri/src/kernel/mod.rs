@@ -4,6 +4,14 @@ pub mod watcher;
 // Re-export everything from the shared kernel crate
 pub use mindzj_kernel::*;
 
+// Explicit submodule re-exports so `crate::kernel::types::*` paths resolve.
+// `pub use mindzj_kernel::*` already re-exports these modules, but explicit
+// declarations make the intent clear and prevent accidental shadowing.
+pub use mindzj_kernel::links;
+pub use mindzj_kernel::search;
+pub use mindzj_kernel::types;
+pub use mindzj_kernel::vault;
+
 use crate::kernel::error::CommandError;
 use crate::kernel::watcher::VaultWatcher;
 use std::collections::HashMap;
