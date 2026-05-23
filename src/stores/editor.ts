@@ -666,6 +666,37 @@ function createEditorStore() {
     saveTimers.clear();
   }
 
+  // ── Editor lifecycle ──
+  // Groups the 10 Editor-only methods behind a narrow interface.
+  // External consumers (ReadingView, Toolbar, etc.) use the shared
+  // methods directly; Editor.tsx routes through lifecycle.
+  const lifecycle = {
+    /**
+     * Prepare state for (re)creating an EditorView.
+     * Snapshots headings, drains pending external edits, and takes
+     * (read + clear) the persisted CM6 undo/redo history + cursor.
+     */
+    prepareView(path: string, content: string) {
+      storeHeadings(path, content);
+      const pendingExternalEdits = takePendingExternalEdits(path, content);
+      const historyJson = getFileHistoryState(path);
+      if (historyJson != null) clearFileHistoryState(path);
+      const cursorSelection = getFileCursorSelection(path);
+      return { pendingExternalEdits, historyJson, cursorSelection };
+    },
+
+    /**
+     * Persist state before destroying an EditorView.
+     * Writes the serialized CM6 history snapshot so the next
+     * `prepareView` can restore the undo/redo chain.
+     */
+    teardown(path: string, historyState?: any) {
+      if (path && historyState != null) {
+        setFileHistoryState(path, historyState);
+      }
+    },
+  };
+
   return {
     // State
     viewMode,
@@ -721,6 +752,7 @@ function createEditorStore() {
     renameFileState,
     removeFileState,
     cleanup,
+    lifecycle,
   };
 }
 

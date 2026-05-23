@@ -9,6 +9,7 @@
 | **Note** | A single Markdown file inside a vault. May contain wiki-links, frontmatter, embedded images. |
 | **Wiki-link** | `[[target]]` or `[[target|alias]]` syntax for cross-note references. Bidirectional. |
 | **Backlink** | A note that wiki-links *to* the current note. Computed by the link graph. |
+| **NoteAttachment** | An image or binary file referenced by a Note. Stored in the vault's attachment folder. Lifecycle managed by the editor (paste, delete) through a dedicated utility. |
 | **Mindmap** | `.mindzj` file format — structured tree document (not Markdown). |
 | **Plugin** | WebWorker-sandboxed extension with declarative permissions. Obsidian-compatible API surface. |
 | **Theme** | CSS file targeting `data-theme` attribute. 30 built-in + user-importable. |

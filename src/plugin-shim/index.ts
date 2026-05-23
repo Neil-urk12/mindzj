@@ -20,6 +20,10 @@ import {
     _normPath,
     leafForPluginView,
 } from "../stores/plugins";
+import { type EditorView, EditorView as EditorViewClass } from "@codemirror/view";
+import { EditorSelection } from "@codemirror/state";
+import { undo, redo } from "@codemirror/commands";
+import type { ViewMode } from "../stores/editor";
 
 // ---------------------------------------------------------------------------
 // Plugin data directory map
@@ -39,6 +43,242 @@ export function deletePluginDataDir(pluginId: string): void {
     pluginDataDirMap.delete(pluginId);
 }
 
+// ---------------------------------------------------------------------------
+// Plugin Editor API — Obsidian-compatible editor surface for plugins
+// ---------------------------------------------------------------------------
+
+function posToOffset(
+    view: EditorView,
+    pos: { line: number; ch: number },
+): number {
+    const lineNum = Math.max(1, Math.min(view.state.doc.lines, pos.line + 1));
+    const line = view.state.doc.line(lineNum);
+    return Math.min(line.to, line.from + Math.max(0, pos.ch));
+}
+
+function offsetToPos(
+    view: EditorView,
+    offset: number,
+): { line: number; ch: number } {
+    const line = view.state.doc.lineAt(
+        Math.max(0, Math.min(view.state.doc.length, offset)),
+    );
+    return { line: line.number - 1, ch: Math.max(0, offset - line.from) };
+}
+
+/**
+ * Build Obsidian-compatible editor + markdown-view API objects and write
+ * them to `window.__mindzj_plugin_editor_api` and
+ * `window.__mindzj_markdown_view`.  The plugin system depends on these
+ * globals.
+ *
+ * Call with `view = null` to clear both globals.
+ */
+export function createPluginEditorBindings(deps: {
+    view: EditorView | null;
+    containerEl: HTMLElement | null;
+    activeFilePath: string | null;
+    getActiveViewMode: () => ViewMode;
+}): void {
+    const { view, containerEl, activeFilePath, getActiveViewMode } = deps;
+
+    if (!view || !containerEl) {
+        (window as any).__mindzj_plugin_editor_api = null;
+        (window as any).__mindzj_markdown_view = null;
+        return;
+    }
+
+    const editorApi: any = {
+        // Expose the raw CodeMirror 6 EditorView so plugins (e.g.
+        // editing-toolbar) can access cm.state, cm.dispatch(),
+        // cm.dom, register extensions, etc.
+        cm: view,
+        focus: () => view.focus(),
+        getSelection: () => {
+            const sel = view.state.selection.main;
+            return view.state.sliceDoc(sel.from, sel.to);
+        },
+        replaceSelection: (text: string) => {
+            const sel = view.state.selection.main;
+            view.dispatch({
+                changes: { from: sel.from, to: sel.to, insert: text },
+                selection: { anchor: sel.from + text.length },
+            });
+            view.focus();
+        },
+        somethingSelected: () => !view.state.selection.main.empty,
+        getCursor: (which?: "from" | "to") => {
+            const sel = view.state.selection.main;
+            return offsetToPos(
+                view,
+                which === "from"
+                    ? sel.from
+                    : which === "to"
+                      ? sel.to
+                      : sel.head,
+            );
+        },
+        setCursor: (line: number, ch: number) => {
+            const offset = posToOffset(view, { line, ch });
+            view.dispatch({ selection: { anchor: offset } });
+            view.focus();
+        },
+        getLine: (line: number) =>
+            view.state.doc.line(
+                Math.max(1, Math.min(view.state.doc.lines, line + 1)),
+            ).text,
+        lineCount: () => view.state.doc.lines,
+        lastLine: () => view.state.doc.lines - 1,
+        firstLine: () => 0,
+        replaceRange: (
+            text: string,
+            from: { line: number; ch: number },
+            to?: { line: number; ch: number },
+        ) => {
+            const fromOffset = posToOffset(view, from);
+            const toOffset = posToOffset(view, to ?? from);
+            view.dispatch({
+                changes: { from: fromOffset, to: toOffset, insert: text },
+                selection: { anchor: fromOffset + text.length },
+            });
+        },
+        listSelections: () =>
+            view.state.selection.ranges.map((range) => ({
+                anchor: offsetToPos(view, range.anchor),
+                head: offsetToPos(view, range.head),
+            })),
+        setSelections: (
+            ranges: Array<{
+                anchor: { line: number; ch: number };
+                head: { line: number; ch: number };
+            }>,
+        ) => {
+            if (!ranges.length) return;
+            view.dispatch({
+                selection: EditorSelection.create(
+                    ranges.map((range) =>
+                        EditorSelection.range(
+                            posToOffset(view, range.anchor),
+                            posToOffset(view, range.head),
+                        ),
+                    ),
+                ),
+            });
+        },
+        setSelection: (
+            from: { line: number; ch: number },
+            to?: { line: number; ch: number },
+        ) => {
+            const anchor = posToOffset(view, from);
+            const head = to ? posToOffset(view, to) : anchor;
+            view.dispatch({ selection: { anchor, head } });
+        },
+        getDoc: () => ({
+            getValue: () => view.state.doc.toString(),
+            lineCount: () => view.state.doc.lines,
+        }),
+        transaction: () => view.state.update({}),
+        undo: () => undo(view),
+        redo: () => redo(view),
+        exec: (command: string) => {
+            if (command === "undo") return undo(view);
+            if (command === "redo") return redo(view);
+            if (command === "selectAll") {
+                view.dispatch({
+                    selection: { anchor: 0, head: view.state.doc.length },
+                });
+                return true;
+            }
+            return false;
+        },
+        getValue: () => view.state.doc.toString(),
+        setValue: (value: string) => {
+            view.dispatch({
+                changes: {
+                    from: 0,
+                    to: view.state.doc.length,
+                    insert: value,
+                },
+            });
+            return value;
+        },
+        getRange: (
+            from: { line: number; ch: number },
+            to: { line: number; ch: number },
+        ) => {
+            return view.state.sliceDoc(
+                posToOffset(view, from),
+                posToOffset(view, to),
+            );
+        },
+        getScrollInfo: () => ({
+            top: view.scrollDOM.scrollTop,
+            left: view.scrollDOM.scrollLeft,
+            height: view.scrollDOM.scrollHeight,
+            clientHeight: view.scrollDOM.clientHeight,
+        }),
+        scrollTo: (x: number | null, y: number | null) => {
+            if (y !== null) view.scrollDOM.scrollTop = y;
+            if (x !== null) view.scrollDOM.scrollLeft = x;
+        },
+        scrollIntoView: (pos?: { line: number; ch: number }) => {
+            if (pos) {
+                const offset = posToOffset(view, pos);
+                view.dispatch({
+                    effects: EditorViewClass.scrollIntoView(offset),
+                });
+            }
+        },
+    };
+
+    (window as any).__mindzj_plugin_editor_api = editorApi;
+
+    const activePath = activeFilePath ?? "";
+    const fileName = activePath.split("/").pop() ?? activePath;
+    const markdownView: any = {
+        editor: editorApi,
+        containerEl,
+        contentEl: containerEl,
+        // Expose the CM6 view element for plugins that need to attach
+        // toolbars, context menus, or other UI relative to the editor.
+        editMode: { editor: { cm: view } },
+        currentMode: { editor: { cm: view } },
+        sourceMode: { cmEditor: { cm: view } },
+        leaf: {
+            width: containerEl.clientWidth || 0,
+            containerEl,
+            view: null,
+        },
+        file: activePath
+            ? {
+                  path: activePath,
+                  name: fileName,
+                  basename: fileName.replace(/\.[^.]+$/, ""),
+                  extension: fileName.includes(".")
+                      ? (fileName.split(".").pop() ?? "")
+                      : "",
+                  stat: { mtime: Date.now(), ctime: Date.now(), size: 0 },
+                  vault: {
+                      getName: () =>
+                          vaultStore.vaultInfo()?.name ?? "vault",
+                  },
+                  parent: {
+                      path: activePath.includes("/")
+                          ? activePath.split("/").slice(0, -1).join("/")
+                          : "",
+                      name: activePath.includes("/")
+                          ? activePath.split("/").slice(-2, -1)[0] || "/"
+                          : "/",
+                  },
+              }
+            : null,
+        getViewType: () => "markdown",
+        getMode: () =>
+            getActiveViewMode() === "source" ? "source" : "preview",
+    };
+    markdownView.leaf.view = markdownView;
+    (window as any).__mindzj_markdown_view = markdownView;
+}
 
 // ---------------------------------------------------------------------------
 // Obsidian DOM Extensions — monkey-patch HTMLElement.prototype
