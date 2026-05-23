@@ -61,5 +61,9 @@ export default defineConfig(async () => ({
 
   test: {
     environment: "node",
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html"],
+    },
   },
 }));
