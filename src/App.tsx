@@ -19,10 +19,10 @@ import { editorStore, type ViewMode } from "./stores/editor";
 import { settingsStore, type AiProviderConfig } from "./stores/settings";
 import {
     BUILT_IN_ONLINE_PROVIDER_TYPES,
-    aiStore,
+    aiService,
     defaultAiProviderConfig,
-} from "./stores/ai";
-import { workspaceStore, type WorkspaceState } from "./stores/workspace";
+} from "./stores/aiService";
+import { loadWorkspace, saveWorkspace, scheduleSave, type WorkspaceState } from "./stores/workspace";
 import {
     pluginStore,
     hasPluginViewForExtension,
@@ -514,7 +514,7 @@ const App: Component = () => {
             ? (secondaryPanePath() ?? primaryPanePath())
             : primaryPanePath(),
     );
-    const currentAiModelLabel = createMemo(() => aiStore.currentModelLabel());
+    const currentAiModelLabel = createMemo(() => aiService.currentModelLabel());
     const aiPanelModelOptions = createMemo<AiPanelModelOption[]>(() => {
         const settings = settingsStore.settings();
         const options: AiPanelModelOption[] = [];
@@ -1126,7 +1126,7 @@ const App: Component = () => {
             new CustomEvent("mindzj:remember-active-viewport"),
         );
         await Promise.all([
-            workspaceStore.saveWorkspace(buildWorkspaceSnapshot()),
+			await saveWorkspace(buildWorkspaceSnapshot()),
             saveFolderState(),
         ]);
     }
@@ -1725,7 +1725,7 @@ const App: Component = () => {
                               ),
                     );
                     if (!isTransientWindow()) {
-                        const ws = await workspaceStore.loadWorkspace();
+							const ws = await loadWorkspace();
                         editorStore.restoreWorkspaceState(ws);
                         // Restore sidebar state
                         if (ws.sidebar_tab)
@@ -1889,7 +1889,7 @@ const App: Component = () => {
     createEffect(() => {
         const info = vaultStore.vaultInfo();
         if (!info || isTransientWindow() || workspaceRestoreInProgress) return;
-        workspaceStore.scheduleSave(buildWorkspaceSnapshot());
+		scheduleSave(buildWorkspaceSnapshot());
     });
 
     /**
@@ -2358,7 +2358,7 @@ const App: Component = () => {
         pushAiPanelStatus(t("aiPanel.voiceTranscribing"));
         try {
             const wavBuffer = encodeWav(chunks, sampleRate);
-            const text = await aiStore.transcribeGrokAudio(
+            const text = await aiService.transcribeGrokAudio(
                 arrayBufferToBase64(wavBuffer),
                 `mindzj_recording_${aiAudioFileTimestamp()}.wav`,
                 "audio/wav",
@@ -2397,7 +2397,7 @@ const App: Component = () => {
         setAiVoiceBusy(true);
         pushAiPanelStatus(t("aiPanel.ttsWorking"));
         try {
-            const result = await aiStore.synthesizeGrokSpeech(text);
+            const result = await aiService.synthesizeGrokSpeech(text);
             pushAiPanelStatus(t("aiPanel.ttsExported", { path: result.path }));
         } catch (err: any) {
             pushAiPanelStatus(err?.message || String(err));
@@ -2475,7 +2475,7 @@ const App: Component = () => {
         };
         pushProgress("message", t("aiPanel.working"));
         try {
-            const result = await aiStore.runInstruction(instruction, {
+            const result = await aiService.runInstruction(instruction, {
                 restrictToActiveFile: true,
                 onProgress: (event) => pushProgress(event.phase, event.message),
             });

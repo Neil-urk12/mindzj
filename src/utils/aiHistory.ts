@@ -1,7 +1,7 @@
 import type { AiProviderConfig } from "../stores/settings";
 import type { AiQuestionHistoryEntry } from "../types/app";
 import { AI_QUESTION_HISTORY_LIMIT } from "../types/app";
-import { aiProviderModelLabel } from "../stores/ai";
+import { aiProviderModelLabel } from "../stores/aiService";
 import { getClientPlatform } from "./platform";
 
 const CLIENT_PLATFORM = getClientPlatform();

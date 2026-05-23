@@ -361,7 +361,7 @@ function audioExportFileName(): string {
 }
 
 
-function createAiStore() {
+function createAiService() {
   async function getApiKey(config: AiProviderConfig): Promise<string | null> {
     if (!providerNeedsRealKey(config)) return null;
     const value = config.api_key?.trim();
@@ -574,4 +574,4 @@ function createAiStore() {
   };
 }
 
-export const aiStore = createAiStore();
+export const aiService = createAiService();

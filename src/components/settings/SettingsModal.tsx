@@ -21,11 +21,11 @@ import {
     GROK_STT_MODEL,
     GROK_TTS_LANGUAGE_OPTIONS,
     GROK_TTS_VOICES,
-    aiStore,
+    aiService,
     builtInModelOptions,
     defaultAiProviderConfig,
     isBuiltInOnlineProviderType,
-} from "../../stores/ai";
+} from "../../stores/aiService";
 import {
     aiModelSettingsKey,
     settingsStore,
@@ -340,7 +340,7 @@ export const SettingsModal: Component<SettingsModalProps> = (props) => {
             return;
         }
         setAiApiKeyVisible(false);
-        void aiStore.loadApiKey(config).then((key) => {
+        void aiService.loadApiKey(config).then((key) => {
             if (token !== aiApiKeyLoadToken) return;
             setAiApiKeyDraft(key ?? "");
         });
@@ -590,7 +590,7 @@ export const SettingsModal: Component<SettingsModalProps> = (props) => {
                     return;
                 }
             }
-            const result = await aiStore.testConnection(aiConfig());
+            const result = await aiService.testConnection(aiConfig());
             const lines = [t("settings.aiConnected")];
             if (result.model) {
                 lines.push(
