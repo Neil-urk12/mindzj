@@ -53,7 +53,7 @@ import { Toolbar } from "./components/editor/Toolbar";
 import {
     enhanceMarkdownPreviewHtml,
     renderMarkdownPreviewHtml,
-} from "./components/editor/ReadingView";
+} from "./utils/markdownRenderer";
 import { ConfirmDialog } from "./components/common/ConfirmDialog";
 import { StatusBar } from "./components/common/StatusBar";
 import { WelcomeScreen } from "./components/common/WelcomeScreen";
