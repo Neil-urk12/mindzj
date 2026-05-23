@@ -38,8 +38,7 @@ import {
     setFindQuery,
 } from "../../stores/findState";
 import { openFileRouted } from "../../utils/openFileRouted";
-import { showImageContextMenu } from "./extensions/livePreview";
-import { attachWheelZoom, attachCtrlClick } from "../../utils/imageInteraction";
+import { showImageContextMenu, attachWheelZoom, attachCtrlClick } from "../../utils/imageInteraction";
 import {
     LIST_INDENT_EXTRA_PX,
     LIST_RENDER_TAB_SIZE,

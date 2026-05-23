@@ -21,8 +21,10 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { resolveImageAssetUrl } from "./vaultPaths";
 import { settingsStore } from "../stores/settings";
 import { openFileRouted } from "./openFileRouted";
+import { t } from "../i18n";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -305,3 +307,255 @@ export function getResizePresets(): string[] {
   const s = settingsStore.settings();
   return parseResizeOptions(s.image_resize_options);
 }
+
+// ---------------------------------------------------------------------------
+// Image context menu
+// ---------------------------------------------------------------------------
+
+/**
+ * Show a right-click context menu on an image with options to:
+ * - Delete image from note and from vault storage
+ * - Open image in default app
+ * - Show image in file manager
+ * - Copy image path
+ */
+export function showImageContextMenu(
+    e: MouseEvent,
+    imageSrc: string,
+    currentFilePath: string,
+    imgElement?: HTMLImageElement,
+    // Optional persister called after the resize preset runs --
+    // lets the caller write the new width back into the markdown
+    // source so it survives across reloads. Passed by both the
+    // live-preview ImageWidget AND the reading-view image post-
+    // processor; if it's omitted the DOM change is ephemeral and
+    // lost on the next render.
+    onResize?: (newWidth: number) => void,
+) {
+    // Remove any existing context menu
+    document
+        .querySelectorAll(".mz-image-context-menu")
+        .forEach((el) => el.remove());
+
+    const menu = document.createElement("div");
+    menu.className = "mz-image-context-menu";
+    Object.assign(menu.style, {
+        position: "fixed",
+        zIndex: "10002",
+        background: "var(--mz-bg-secondary, #2b2b2b)",
+        border: "1px solid var(--mz-border-strong, #555)",
+        borderRadius: "6px",
+        padding: "4px 0",
+        minWidth: "180px",
+        maxWidth: "320px",
+        boxShadow: "0 6px 24px rgba(0,0,0,0.4)",
+        fontSize: "13px",
+        color: "var(--mz-text-primary, #ccc)",
+        fontFamily: "var(--mz-font-sans, system-ui)",
+        userSelect: "none",
+    });
+
+    function addMenuItem(
+        label: string,
+        onClick: () => void,
+        opts?: { danger?: boolean },
+    ) {
+        const item = document.createElement("div");
+        Object.assign(item.style, {
+            padding: "6px 16px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            transition: "background 80ms",
+            color: opts?.danger ? "var(--mz-error, #e06c75)" : "inherit",
+        });
+        item.textContent = label;
+        item.addEventListener("mouseenter", () => {
+            item.style.background = "var(--mz-bg-hover, #333)";
+        });
+        item.addEventListener("mouseleave", () => {
+            item.style.background = "transparent";
+        });
+        item.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            closeMenu();
+            onClick();
+        });
+        menu.appendChild(item);
+    }
+
+    function addSeparator() {
+        const sep = document.createElement("div");
+        Object.assign(sep.style, {
+            height: "1px",
+            background: "var(--mz-border, #3e3e3e)",
+            margin: "4px 8px",
+        });
+        menu.appendChild(sep);
+    }
+
+    // Resolve the image path relative to the vault
+    function resolveImagePath(): string {
+        let imgPath = imageSrc;
+        // Handle relative paths
+        if (imgPath.startsWith("./") || imgPath.startsWith("../")) {
+            const dir = currentFilePath.includes("/")
+                ? currentFilePath.split("/").slice(0, -1).join("/")
+                : "";
+            const parts = (dir ? dir + "/" + imgPath : imgPath).split("/");
+            const resolved: string[] = [];
+            for (const p of parts) {
+                if (p === "..") resolved.pop();
+                else if (p !== ".") resolved.push(p);
+            }
+            imgPath = resolved.join("/");
+        }
+        // Strip leading "/" so Rust Path::join treats it as relative to vault root
+        // (on Windows, a leading "/" would make it an absolute drive-root path)
+        if (imgPath.startsWith("/")) {
+            imgPath = imgPath.slice(1);
+        }
+        return imgPath;
+    }
+
+    // -- Copy image path --
+    addMenuItem(t("livePreview.copyImagePath"), () => {
+        navigator.clipboard.writeText(imageSrc).catch(() => {});
+    });
+
+    // -- Open in default app --
+    addMenuItem(t("livePreview.openInDefaultApp"), () => {
+        invoke("open_in_default_app", {
+            relativePath: resolveImagePath(),
+        }).catch((err) => {
+            console.warn(
+                "[ImageContextMenu] Failed to open in default app:",
+                err,
+            );
+        });
+    });
+
+    // -- Show in file manager --
+    addMenuItem(t("context.showInExplorer"), () => {
+        invoke("reveal_in_file_manager", {
+            relativePath: resolveImagePath(),
+        }).catch((err) => {
+            console.warn(
+                "[ImageContextMenu] Failed to reveal in file manager:",
+                err,
+            );
+        });
+    });
+
+    // -- Resize presets --
+    if (imgElement) {
+        const presets = getResizePresets();
+        if (presets.length > 0) {
+            addSeparator();
+            for (const preset of presets) {
+                addMenuItem(t("livePreview.resizeTo", { preset }), () => {
+                    applyResizePreset(imgElement, preset, onResize);
+                });
+            }
+        }
+    }
+
+    addSeparator();
+
+    // -- Delete image --
+    addMenuItem(
+        t("livePreview.deleteImage"),
+        async () => {
+            const imgPath = resolveImagePath();
+            // Check if there's an active editor (live-preview/source mode)
+            const hasEditor = !!(window as any).__mindzj_plugin_editor_api;
+            if (hasEditor) {
+                // Dispatch to Editor.tsx handler which modifies the CM6 document
+                document.dispatchEvent(
+                    new CustomEvent("mindzj:delete-image", {
+                        detail: {
+                            imageSrc,
+                            imagePath: imgPath,
+                            currentFilePath,
+                        },
+                    }),
+                );
+            } else {
+                // Reading mode: read the file, remove the reference, write back
+                try {
+                    const result = await invoke<{ content: string }>(
+                        "read_file",
+                        { relativePath: currentFilePath },
+                    );
+                    const escapedSrc = imageSrc.replace(
+                        /[.*+?^${}()|[\]\\]/g,
+                        "\\$&",
+                    );
+                    const patterns = [
+                        new RegExp(`!\\[[^\\]]*\\]\\(${escapedSrc}\\)\\n?`),
+                        new RegExp(`!\\[\\[${escapedSrc}\\]\\]\\n?`),
+                    ];
+                    let newContent = result.content;
+                    for (const re of patterns) {
+                        const replaced = newContent.replace(re, "");
+                        if (replaced !== newContent) {
+                            newContent = replaced;
+                            break;
+                        }
+                    }
+                    if (newContent !== result.content) {
+                        await invoke("write_file", {
+                            relativePath: currentFilePath,
+                            content: newContent,
+                        });
+                    }
+                } catch (err) {
+                    console.warn(
+                        "[ImageContextMenu] Failed to update file:",
+                        err,
+                    );
+                }
+            }
+            // Delete the image file from the vault
+            invoke("delete_file", { relativePath: imgPath }).catch((err) => {
+                console.warn("[ImageContextMenu] Failed to delete image:", err);
+            });
+        },
+        { danger: true },
+    );
+
+    // Position menu at mouse cursor, clamped within viewport
+    document.body.appendChild(menu);
+    const rect = menu.getBoundingClientRect();
+    const x = Math.min(e.clientX, window.innerWidth - rect.width - 8);
+    const y = Math.min(e.clientY, window.innerHeight - rect.height - 8);
+    menu.style.left = Math.max(0, x) + "px";
+    menu.style.top = Math.max(0, y) + "px";
+
+    // Backdrop to close menu on outside click
+    const backdrop = document.createElement("div");
+    Object.assign(backdrop.style, {
+        position: "fixed",
+        inset: "0",
+        zIndex: "10001",
+        background: "transparent",
+    });
+
+    function closeMenu() {
+        menu.remove();
+        backdrop.remove();
+    }
+
+    backdrop.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();
+        closeMenu();
+    });
+    backdrop.addEventListener("contextmenu", (ev) => {
+        ev.preventDefault();
+        closeMenu();
+    });
+    document.body.appendChild(backdrop);
+}
+
