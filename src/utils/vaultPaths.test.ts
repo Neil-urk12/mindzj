@@ -303,7 +303,7 @@ describe("isExternalPath", () => {
   });
 
   it("accepts path with colon as external (matches scheme regex)", () => {
-    expect(isExternalPath("foo:bar/baz")).toBe(true); // "foo:" matches scheme regex (3+ chars before colon)
+    expect(isExternalPath("foo:bar/baz")).toBe(true); // "foo:" matches scheme regex (initial letter + 1+ alphanumeric chars before colon)
   });
 
   it("rejects dot-relative paths", () => {

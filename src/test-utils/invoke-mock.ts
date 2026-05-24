@@ -18,11 +18,23 @@ const DEFAULT_STUBS: Record<string, InvokeResult> = {
   get_file_tree: [],
   open_vault: { name: "", path: "" },
   list_entries: [],
+  get_vault_info: { name: "", path: "" },
+  list_snapshots: [],
+  restore_snapshot: undefined,
+  list_css_snippets: [],
+  get_snippets_dir: "",
+  list_themes: [],
+  import_theme: undefined,
+  delete_theme: undefined,
+  write_theme: undefined,
+  get_themes_dir: "",
+  open_path_in_file_manager: undefined,
 
   // Search / backlinks
   search_vault: [],
   get_backlinks: [],
   get_forward_links: [],
+  get_unresolved_links: [],
   get_graph_data: { nodes: [], edges: [] },
 
   // Settings
@@ -30,9 +42,15 @@ const DEFAULT_STUBS: Record<string, InvokeResult> = {
   update_settings: undefined,
   get_hotkeys: [],
   save_hotkeys: undefined,
+  set_theme: undefined,
+  set_font_size: undefined,
+  set_view_mode: undefined,
+  set_ai_api_key: undefined,
+  get_window_state: null,
+  save_window_state: undefined,
 
   // Binary files
-  read_binary_file: new Uint8Array(),
+  read_binary_file: "",
   write_binary_file: undefined,
 
   // File metadata
@@ -49,10 +67,16 @@ const DEFAULT_STUBS: Record<string, InvokeResult> = {
   list_plugins: [],
   read_plugin_styles: "",
   read_plugin_main: "",
+  toggle_plugin: undefined,
+  delete_plugin: undefined,
 
   // Themes / CSS
   read_theme: "",
   read_css_snippet: "",
+
+  // Screenshot
+  capture_screen: "",
+  save_screenshot_to_temp: "",
 
   // Workspace
   save_workspace: undefined,
@@ -82,6 +106,16 @@ const DEFAULT_STUBS: Record<string, InvokeResult> = {
   // App
   open_in_default_app: undefined,
   reveal_in_file_manager: undefined,
+
+  // Window
+  open_vault_window: undefined,
+  open_file_in_split_window: undefined,
+  open_image_in_new_window: undefined,
+  exit_app: undefined,
+  close_or_exit: undefined,
+  open_devtools: undefined,
+  minimize_window: undefined,
+  export_current_webview_to_pdf: undefined,
 };
 
 export function createMockInvoke(overrides?: Record<string, InvokeResult>) {
