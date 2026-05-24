@@ -13,15 +13,9 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { vaultStore, type FileContent } from "./stores/vault";
 import { editorStore, type ViewMode } from "./stores/editor";
-import { settingsStore, type AiProviderConfig } from "./stores/settings";
-import {
-    BUILT_IN_ONLINE_PROVIDER_TYPES,
-    aiService,
-    defaultAiProviderConfig,
-} from "./stores/aiService";
+import { settingsStore } from "./stores/settings";
 import { loadWorkspace, saveWorkspace, scheduleSave, type WorkspaceState } from "./stores/workspace";
 import {
     pluginStore,
@@ -50,10 +44,6 @@ import {
 import { Calendar } from "./components/sidebar/Calendar";
 import { TabBar } from "./components/tabs/TabBar";
 import { Toolbar } from "./components/editor/Toolbar";
-import {
-    enhanceMarkdownPreviewHtml,
-    renderMarkdownPreviewHtml,
-} from "./utils/markdownRenderer";
 import { ConfirmDialog } from "./components/common/ConfirmDialog";
 import { StatusBar } from "./components/common/StatusBar";
 import { WelcomeScreen } from "./components/common/WelcomeScreen";
@@ -71,7 +61,6 @@ import {
 } from "@tauri-apps/plugin-global-shortcut";
 import { promptDialog } from "./components/common/ConfirmDialog";
 import { openFileRouted } from "./utils/openFileRouted";
-import { displayName } from "./utils/displayName";
 import {
     openSearchPanel,
     closeSearchPanel,
@@ -84,15 +73,14 @@ import { EditorView } from "@codemirror/view";
 import { t } from "./i18n";
 import { setFindQuery } from "./stores/findState";
 import { getClientPlatform } from "./utils/platform";
-import { DEFAULT_ATTACHMENT_FOLDER } from "./constants/vaultPaths";
-import { SplitDirection, PaneSlot, AiPanelModelOption, AiQuestionHistoryEntry, AiHistoryDirection, Point, AI_QUESTION_HISTORY_LIMIT } from "./types/app";
-import { AI_PANEL_MIN_HEIGHT, AI_PANEL_DEFAULT_HEIGHT } from "./types/app";
-import { normalizeVaultPath, aiQuestionHistoryStorageKey, aiHistoryDateKey, parseAiQuestionHistory, aiPanelModelOptionValue, aiPanelModelOptionLabel, aiAudioFileTimestamp } from "./utils/aiHistory";
-import { encodeWav, arrayBufferToBase64 } from "./utils/audio";
-import { ensurePdfExtension, waitForNextFrame, waitForPdfExportAssets } from "./utils/pdfExport";
+import { SplitDirection, PaneSlot } from "./types/app";
+import { normalizeVaultPath } from "./utils/aiHistory";
 import { AiBottomPanel } from "./components/ai/AiBottomPanel";
 import { SplitWorkspaceView } from "./components/workspace/SplitWorkspaceView";
 import { VaultSwitcher } from "./components/sidebar/VaultSwitcher";
+import { useScreenshot } from "./hooks/useScreenshot";
+import { usePdfExport } from "./hooks/usePdfExport";
+import { useAiPanel } from "./hooks/useAiPanel";
 
 type SidebarTab = "files" | "outline" | "search" | "calendar";
 
@@ -132,29 +120,6 @@ const App: Component = () => {
     // flash in the shared `.mz-search-flash` colour).
     const [showGotoLine, setShowGotoLine] = createSignal(false);
     const [showSettings, setShowSettings] = createSignal(false);
-    const [showAiPanel, setShowAiPanel] = createSignal(false);
-    const [aiPanelInput, setAiPanelInput] = createSignal("");
-    const [aiPanelOutput, setAiPanelOutput] = createSignal("");
-    const [aiPanelBusy, setAiPanelBusy] = createSignal(false);
-    const [aiVoiceRecording, setAiVoiceRecording] = createSignal(false);
-    const [aiVoiceBusy, setAiVoiceBusy] = createSignal(false);
-    const [showAiHistory, setShowAiHistory] = createSignal(false);
-    const [aiQuestionHistory, setAiQuestionHistory] = createSignal<
-        AiQuestionHistoryEntry[]
-    >([]);
-    const [aiHistoryDate, setAiHistoryDate] = createSignal("");
-    const [aiHistoryCursor, setAiHistoryCursor] = createSignal<number | null>(
-        null,
-    );
-    const [aiPanelHeight, setAiPanelHeight] = createSignal(
-        AI_PANEL_DEFAULT_HEIGHT,
-    );
-    const [aiHistoryPosition, setAiHistoryPosition] = createSignal<Point>({
-        x: 0,
-        y: 0,
-    });
-    const [aiHistoryPositionReady, setAiHistoryPositionReady] =
-        createSignal(false);
     const [sidebarTab, setSidebarTab] = createSignal<SidebarTab>("files");
     const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
     const [showVaultMenu, setShowVaultMenu] = createSignal(false);
@@ -184,12 +149,7 @@ const App: Component = () => {
     const [startupPayloadApplied, setStartupPayloadApplied] =
         createSignal(false);
     const isTransientWindow = () => startupParams.get("split") === "1";
-    let aiVoiceStream: MediaStream | null = null;
-    let aiVoiceAudioContext: AudioContext | null = null;
-    let aiVoiceSource: MediaStreamAudioSourceNode | null = null;
-    let aiVoiceProcessor: ScriptProcessorNode | null = null;
-    let aiVoiceSamples: Float32Array[] = [];
-    let aiVoiceSampleRate = 48000;
+    // Voice recording refs — moved to useAiPanel hook
 
     // When the app restarts with a previously-opened vault saved in
     // localStorage, onMount will asynchronously restore it. Between the
@@ -271,242 +231,12 @@ const App: Component = () => {
         shortcutToastTimer = setTimeout(() => setShortcutToast(null), 1200);
     }
 
-    let pdfExportInProgress = false;
+    // Hooks
+    const screenshot = useScreenshot({ showToast: showShortcutToast });
+    const pdfExport = usePdfExport({ showToast: showShortcutToast });
+    const aiPanel = useAiPanel({ vaultPath: () => vaultStore.vaultInfo()?.path });
 
-    function createPdfExportStyle(): HTMLStyleElement {
-        const style = document.createElement("style");
-        style.id = "mz-pdf-export-style";
-        style.textContent = `
-#mz-pdf-export-root {
-    --mz-bg-primary: #ffffff;
-    --mz-bg-secondary: #f8fafc;
-    --mz-bg-tertiary: #f3f6f9;
-    --mz-bg-hover: #eef2f6;
-    --mz-bg-codeblock: #f6f8fa;
-    --mz-text-primary: #1f2328;
-    --mz-text-secondary: #424a53;
-    --mz-text-muted: #6e7781;
-    --mz-border: #d8dee6;
-    --mz-border-strong: #b6c0cc;
-    --mz-accent: #0969da;
-    --mz-accent-subtle: #ddf4ff;
-    --mz-syntax-code-bg: #f6f8fa;
-    --mz-syntax-keyword: #cf222e;
-    --mz-syntax-string: #0a3069;
-    --mz-syntax-number: #953800;
-    --mz-syntax-comment: #6e7781;
-    --mz-syntax-function: #8250df;
-    --mz-syntax-type: #116329;
-    --mz-syntax-variable: #953800;
-    background: #ffffff !important;
-    color: #1f2328 !important;
-    border: 0 !important;
-    outline: 0 !important;
-    box-shadow: none !important;
-}
-
-@media screen {
-    #mz-pdf-export-root {
-        position: fixed;
-        top: 0;
-        left: -100000px;
-        width: 794px;
-        min-height: 1123px;
-        visibility: hidden;
-        pointer-events: none;
-        background: #ffffff;
-        color: #1f2328;
-    }
-}
-
-@media print {
-    @page {
-        size: A4 portrait;
-        margin: 0;
-    }
-
-    html,
-    body {
-        width: auto !important;
-        height: auto !important;
-        overflow: visible !important;
-        background: #ffffff !important;
-        color: #1f2328 !important;
-        border: 0 !important;
-        outline: 0 !important;
-        box-shadow: none !important;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-    }
-
-    * {
-        box-shadow: none !important;
-    }
-
-    body > *:not(#mz-pdf-export-root) {
-        display: none !important;
-    }
-
-    body > #mz-pdf-export-root {
-        display: block !important;
-        position: static !important;
-        visibility: visible !important;
-        pointer-events: auto !important;
-        width: auto !important;
-        min-height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #ffffff !important;
-        color: #1f2328 !important;
-        border: 0 !important;
-        outline: 0 !important;
-        box-shadow: none !important;
-    }
-
-    #mz-pdf-export-root .mz-reading-view {
-        width: 100% !important;
-        max-width: none !important;
-        margin: 0 !important;
-        padding: 0 0 0 24px !important;
-        box-sizing: border-box !important;
-        background: #ffffff !important;
-        color: #1f2328 !important;
-        border: 0 !important;
-        outline: 0 !important;
-        box-shadow: none !important;
-    }
-
-    #mz-pdf-export-root a {
-        color: #0969da !important;
-        text-decoration: underline !important;
-    }
-
-    #mz-pdf-export-root img {
-        max-width: 100% !important;
-        break-inside: avoid;
-    }
-
-    #mz-pdf-export-root table,
-    #mz-pdf-export-root pre,
-    #mz-pdf-export-root blockquote,
-    #mz-pdf-export-root .mz-rv-code,
-    #mz-pdf-export-root .mz-rv-callout {
-        break-inside: avoid;
-    }
-
-    #mz-pdf-export-root .mz-rv-code {
-        background: #f6f8fa !important;
-        color: #1f2328 !important;
-        border: 1px solid #d8dee6 !important;
-        border-radius: 6px !important;
-    }
-
-    #mz-pdf-export-root .mz-rv-code pre,
-    #mz-pdf-export-root .mz-rv-code pre.shiki {
-        background: transparent !important;
-        color: #1f2328 !important;
-    }
-
-    #mz-pdf-export-root .mz-rv-table th {
-        background: #f3f6f9 !important;
-    }
-
-    #mz-pdf-export-root .mz-rv-code-copy,
-    #mz-pdf-export-root .mz-rv-code-lang {
-        display: none !important;
-    }
-}
-`;
-        return style;
-    }
-
-    async function openNativePrintDialogForPdfExport(): Promise<void> {
-        await waitForNextFrame();
-        await new Promise<void>((resolve) => {
-            let finished = false;
-            let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
-            const done = () => {
-                if (finished) return;
-                finished = true;
-                if (fallbackTimer) clearTimeout(fallbackTimer);
-                window.removeEventListener("afterprint", done);
-                resolve();
-            };
-
-            window.addEventListener("afterprint", done, { once: true });
-            window.print();
-            fallbackTimer = setTimeout(done, 30000);
-        });
-    }
-
-    async function exportMarkdownPathToPdf(path: string) {
-        if (pdfExportInProgress) return;
-        const vaultRoot = vaultStore.vaultInfo()?.path ?? "";
-        if (!vaultRoot) return;
-
-        const stem = displayName(path).replace(/\.(md|markdown|mdx)$/i, "");
-        const selectedPath =
-            CLIENT_PLATFORM === "windows"
-                ? await saveDialog({
-                      title: t("pdfExport.dialogTitle"),
-                      defaultPath: `${stem || "note"}.pdf`,
-                      filters: [{ name: "PDF", extensions: ["pdf"] }],
-                  })
-                : null;
-        if (CLIENT_PLATFORM === "windows" && !selectedPath) return;
-
-        pdfExportInProgress = true;
-        showShortcutToast(t("pdfExport.exporting"));
-
-        const outputPath = selectedPath ? ensurePdfExtension(selectedPath) : "";
-        let root: HTMLDivElement | null = null;
-        let style: HTMLStyleElement | null = null;
-        try {
-            document.getElementById("mz-pdf-export-root")?.remove();
-            document.getElementById("mz-pdf-export-style")?.remove();
-
-            await editorStore.flushAllPendingSaves();
-            const file = await invoke<FileContent>("read_file", {
-                relativePath: path,
-            });
-
-            root = document.createElement("div");
-            root.id = "mz-pdf-export-root";
-            root.setAttribute("data-source-path", path);
-
-            const content = document.createElement("div");
-            content.className = "mz-reading-view mz-pdf-export-content";
-            content.innerHTML = renderMarkdownPreviewHtml(
-                file.content,
-                vaultRoot,
-                path,
-            );
-            root.appendChild(content);
-
-            style = createPdfExportStyle();
-            document.head.appendChild(style);
-            document.body.appendChild(root);
-
-            await enhanceMarkdownPreviewHtml(content);
-            await waitForPdfExportAssets(root);
-
-            if (CLIENT_PLATFORM === "windows") {
-                await invoke("export_current_webview_to_pdf", { outputPath });
-                console.info("[PDF] exported:", outputPath);
-                showShortcutToast(t("pdfExport.exported"));
-            } else {
-                await openNativePrintDialogForPdfExport();
-                showShortcutToast(t("pdfExport.printDialogOpened"));
-            }
-        } catch (error) {
-            console.warn("[PDF] export failed:", error);
-            showShortcutToast(t("pdfExport.failed"));
-        } finally {
-            root?.remove();
-            style?.remove();
-            pdfExportInProgress = false;
-        }
-    }
+    // PDF export functions — moved to usePdfExport hook
 
     const uiScale = createMemo(() => editorStore.uiZoom() / 100);
     const activePanePath = createMemo(() =>
@@ -514,105 +244,12 @@ const App: Component = () => {
             ? (secondaryPanePath() ?? primaryPanePath())
             : primaryPanePath(),
     );
-    const currentAiModelLabel = createMemo(() => aiService.currentModelLabel());
-    const aiPanelModelOptions = createMemo<AiPanelModelOption[]>(() => {
-        const settings = settingsStore.settings();
-        const options: AiPanelModelOption[] = [];
-        const seen = new Set<string>();
-        const addOption = (config: AiProviderConfig | null | undefined) => {
-            if (!config?.model?.trim()) return;
-            const value = aiPanelModelOptionValue(config);
-            if (seen.has(value)) return;
-            seen.add(value);
-            options.push({
-                value,
-                label: aiPanelModelOptionLabel(config),
-                config,
-            });
-        };
-
-        addOption(settings.ai_provider);
-        addOption(defaultAiProviderConfig("LMStudio"));
-        addOption(defaultAiProviderConfig("Ollama"));
-        for (const provider of BUILT_IN_ONLINE_PROVIDER_TYPES) {
-            addOption(defaultAiProviderConfig(provider));
-        }
-        for (const config of settings.ai_custom_providers ?? []) {
-            addOption(config);
-        }
-
-        return options;
-    });
-    const currentAiModelOptionValue = createMemo(() => {
-        const config =
-            settingsStore.settings().ai_provider ??
-            defaultAiProviderConfig("Ollama");
-        return aiPanelModelOptionValue(config);
-    });
-    const aiQuestionHistoryKey = createMemo(() =>
-        aiQuestionHistoryStorageKey(vaultStore.vaultInfo()?.path),
-    );
-    const aiHistoryDates = createMemo(() => {
-        const dates = new Set<string>();
-        for (const entry of aiQuestionHistory()) {
-            const key = aiHistoryDateKey(entry.createdAt);
-            if (key) dates.add(key);
-        }
-        return Array.from(dates).sort().reverse();
-    });
-    const selectedAiHistoryEntries = createMemo(() => {
-        const date = aiHistoryDate();
-        return aiQuestionHistory()
-            .filter((entry) => aiHistoryDateKey(entry.createdAt) === date)
-            .slice()
-            .sort(
-                (a, b) =>
-                    new Date(b.createdAt).getTime() -
-                    new Date(a.createdAt).getTime(),
-            );
-    });
+    // AI panel memos — moved to useAiPanel hook
     const splitPaneActive = createMemo(() => secondaryPanePath() !== null);
 
-    createEffect(
-        on(aiQuestionHistoryKey, (key) => {
-            let entries: AiQuestionHistoryEntry[] = [];
-            try {
-                entries = parseAiQuestionHistory(localStorage.getItem(key));
-            } catch {
-                entries = [];
-            }
-            setAiQuestionHistory(entries);
-            setAiHistoryCursor(null);
-            const dates = Array.from(
-                new Set(
-                    entries
-                        .map((entry) => aiHistoryDateKey(entry.createdAt))
-                        .filter(Boolean),
-                ),
-            )
-                .sort()
-                .reverse();
-            setAiHistoryDate(dates[0] ?? "");
-        }),
-    );
+    // AI panel effects — moved to useAiPanel hook
 
-    createEffect(() => {
-        const dates = aiHistoryDates();
-        const current = aiHistoryDate();
-        if (!dates.length) {
-            if (current) setAiHistoryDate("");
-            return;
-        }
-        if (!current || !dates.includes(current)) {
-            setAiHistoryDate(dates[0]);
-        }
-    });
-
-    // Screenshot state
-    const [screenshotData, setScreenshotData] = createSignal<string | null>(
-        null,
-    );
-    const [screenshotLoading, setScreenshotLoading] = createSignal(false);
+    // Screenshot signals — moved to useScreenshot hook
 
     function isViewMode(value: string | null): value is ViewMode {
         return (
@@ -1138,109 +775,7 @@ const App: Component = () => {
         resetFolderVisibilityState();
     }
 
-    /** Trigger screenshot capture (called by Alt+F) */
-    async function startScreenshot() {
-        if (screenshotLoading() || screenshotData()) return;
-        setScreenshotLoading(true);
-        try {
-            const base64 = await invoke<string>("capture_screen");
-            setScreenshotData(base64);
-        } catch (err) {
-            console.error("[Screenshot] capture_screen failed:", err);
-        } finally {
-            setScreenshotLoading(false);
-        }
-    }
-
-    /** Save annotated screenshot to vault and insert markdown link */
-    async function handleScreenshotSave(base64Png: string) {
-        try {
-            // Copy the screenshot to the system clipboard instead
-            // of writing it directly into `.mindzj/images/` + inserting
-            // markdown. The user wanted a two-step flow: snip → appear
-            // on clipboard → paste with Ctrl+V into whichever note they
-            // choose, at whichever position they want.
-            //
-            // The existing CM6 `paste` dom-event handler
-            // (`src/components/editor/Editor.tsx`) already intercepts
-            // image items from `clipboardData.items`, generates a
-            // filename like `Pasted image YYYYMMDDHHmmss.png`, saves
-            // to the attachment folder, and inserts the markdown
-            // reference. So by putting the PNG on the clipboard here,
-            // pressing Ctrl+V in an editor re-uses that whole
-            // infrastructure for free.
-            //
-            // We use the browser Clipboard API (`navigator.clipboard
-            // .write`) with a `ClipboardItem` carrying the PNG blob.
-            // Tauri's custom protocol origin counts as a secure
-            // context in WebView2, so this API is available.
-            //
-            // (Tauri's own `writeImage` from `plugin-clipboard-manager`
-            // expects a `Uint8Array` of RGBA pixels, not a PNG byte
-            // stream, so we'd have to decode the PNG first — lots of
-            // extra code. The Blob path is simpler and works.)
-
-            // Decode base64 → Uint8Array → Blob(image/png)
-            const binary = atob(base64Png);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) {
-                bytes[i] = binary.charCodeAt(i);
-            }
-            const blob = new Blob([bytes], { type: "image/png" });
-
-            // Write to the system clipboard. The `ClipboardItem`
-            // MIME → Blob map is how `navigator.clipboard.write`
-            // signals "this item is an image/png". Any paste
-            // target — including MindZJ's own editor paste handler,
-            // which reads `clipboardData.items` — will see this as
-            // an image.
-            try {
-                await navigator.clipboard.write([
-                    new ClipboardItem({ "image/png": blob }),
-                ]);
-            } catch (clipErr) {
-                // If Clipboard API is unavailable for any reason
-                // (e.g. secure-context check failed, browser
-                // policy blocked it), fall back to the old save-
-                // to-vault behavior so the screenshot isn't lost.
-                console.warn(
-                    "[Screenshot] clipboard.write failed, falling back to disk:",
-                    clipErr,
-                );
-                // Build a filename. NOTE: `.slice(0, 15)` used to
-                // keep the `.` that separates seconds from
-                // milliseconds in ISO 8601 ("20260411194532.123Z"),
-                // producing filenames like `screenshot_20260411194532..png`
-                // (double dot). `.slice(0, 14)` trims to exactly
-                // `YYYYMMDDHHmmss` (14 chars).
-                const timestamp = new Date()
-                    .toISOString()
-                    .replace(/[-:T]/g, "")
-                    .slice(0, 14);
-                const filename = `screenshot_${timestamp}.png`;
-                const s = settingsStore.settings();
-                const folder = s.attachment_folder || DEFAULT_ATTACHMENT_FOLDER;
-                const relativePath = `${folder}/${filename}`;
-                await invoke("write_binary_file", {
-                    relativePath,
-                    base64Data: base64Png,
-                });
-                const activeFile = vaultStore.activeFile();
-                if (activeFile) {
-                    const imgMarkdown = `![${filename}](${relativePath})`;
-                    document.dispatchEvent(
-                        new CustomEvent("mindzj:insert-text", {
-                            detail: { text: imgMarkdown },
-                        }),
-                    );
-                }
-            }
-        } catch (err) {
-            console.error("[Screenshot] save failed:", err);
-        } finally {
-            setScreenshotData(null);
-        }
-    }
+    // startScreenshot & handleScreenshotSave — moved to useScreenshot hook
 
     onMount(async () => {
         (window as any).__mindzj_flush_workspace = flushWorkspaceNow;
@@ -1322,7 +857,7 @@ const App: Component = () => {
         );
 
         const handleToggleAiPanel = () => {
-            setShowAiPanel((value) => !value);
+            aiPanel.setShowAiPanel((value) => !value);
         };
         document.addEventListener(
             "mindzj:toggle-ai-panel",
@@ -1335,18 +870,6 @@ const App: Component = () => {
             ),
         );
 
-        // ── Reveal-in-tree: triggered from tab context menu ──
-        const handleRevealInTree = () => {
-            setSidebarTab("files");
-            setSidebarCollapsed(false);
-        };
-        document.addEventListener("mindzj:reveal-in-tree", handleRevealInTree);
-        onCleanup(() =>
-            document.removeEventListener(
-                "mindzj:reveal-in-tree",
-                handleRevealInTree,
-            ),
-        );
 
         const handleAppCommand = (e: Event) => {
             const command = (e as CustomEvent).detail?.command;
@@ -1508,69 +1031,7 @@ const App: Component = () => {
         }
     });
 
-    // Screenshot hotkey lifecycle.
-    //
-    // We need to:
-    //   1. Register the hotkey once on app boot.
-    //   2. Re-register if the user changes the hotkey in Settings.
-    //   3. Unregister on app exit so a stale OS-level binding doesn't
-    //      survive into the next launch.
-    //
-    // The previous version naively wrapped a `createEffect` around
-    // `getHotkey(...)`. Because settings is reactive and gets
-    // RE-WRITTEN at boot (defaults → loadSettings() result), the
-    // effect would fire twice in the same second — both times calling
-    // unregister() then register(). The OS doesn't release the
-    // binding fast enough between the two calls and we got
-    // "HotKey already registered" warnings on every startup.
-    //
-    // The fix: track the LAST registered combo manually and skip
-    // re-registration if the value didn't actually change.
-    {
-        let lastCombo: string | null = null;
-        let pending: Promise<void> = Promise.resolve();
-
-        const syncShortcut = (nextCombo: string) => {
-            if (nextCombo === lastCombo) return;
-            const previousCombo = lastCombo;
-            lastCombo = nextCombo;
-            // Chain off the previous in-flight register/unregister so
-            // we never have two flows touching the OS hotkey table
-            // concurrently.
-            pending = pending.then(async () => {
-                if (previousCombo) {
-                    try {
-                        await unregister(previousCombo);
-                    } catch {}
-                }
-                try {
-                    await register(nextCombo, (event) => {
-                        if (event.state === "Pressed") startScreenshot();
-                    });
-                } catch (err) {
-                    console.warn(
-                        "[GlobalShortcut] Failed to (re)register screenshot shortcut:",
-                        err,
-                    );
-                    // Roll back so the next change attempt can retry.
-                    lastCombo = previousCombo;
-                }
-            });
-        };
-
-        createEffect(() => {
-            const combo = getHotkey("screenshot", "Alt+G");
-            syncShortcut(combo);
-        });
-
-        onCleanup(() => {
-            const combo = lastCombo;
-            if (combo) {
-                pending = pending.then(() => unregister(combo).catch(() => {}));
-                lastCombo = null;
-            }
-        });
-    }
+    // Screenshot hotkey lifecycle — moved to useScreenshot hook
 
     // ─────────────────────────────────────────────────────────────
     //  Ctrl+Alt+Left / Ctrl+Alt+Right — OS-level global shortcuts
@@ -2202,313 +1663,15 @@ const App: Component = () => {
         });
     }
 
-    function saveAiQuestionHistory(next: AiQuestionHistoryEntry[]) {
-        const trimmed = next.slice(-AI_QUESTION_HISTORY_LIMIT);
-        setAiQuestionHistory(trimmed);
-        setAiHistoryCursor(null);
-        try {
-            localStorage.setItem(
-                aiQuestionHistoryKey(),
-                JSON.stringify(trimmed),
-            );
-        } catch {
-            // History is a convenience feature; storage failures should not block AI runs.
-        }
-    }
-
-    function recordAiQuestion(text: string) {
-        const trimmed = text.trim();
-        if (!trimmed) return;
-        const createdAt = new Date().toISOString();
-        const entry: AiQuestionHistoryEntry = {
-            id: `${createdAt}-${Math.random().toString(36).slice(2, 8)}`,
-            text: trimmed,
-            createdAt,
-        };
-        saveAiQuestionHistory([...aiQuestionHistory(), entry]);
-        setAiHistoryDate(aiHistoryDateKey(createdAt));
-    }
-
-    function deleteAiHistoryEntry(id: string) {
-        saveAiQuestionHistory(
-            aiQuestionHistory().filter((entry) => entry.id !== id),
-        );
-    }
-
-    function clearAiHistoryForSelectedDate() {
-        const date = aiHistoryDate();
-        if (!date) return;
-        saveAiQuestionHistory(
-            aiQuestionHistory().filter(
-                (entry) => aiHistoryDateKey(entry.createdAt) !== date,
-            ),
-        );
-    }
-
-    function clearAllAiHistory() {
-        saveAiQuestionHistory([]);
-    }
-
-    function handleAiPanelInput(value: string) {
-        setAiHistoryCursor(null);
-        setAiPanelInput(value);
-    }
-
-    function navigateAiQuestionHistory(direction: AiHistoryDirection) {
-        const history = aiQuestionHistory();
-        if (!history.length || aiPanelBusy()) return;
-        const current = aiHistoryCursor();
-        if (direction === "prev") {
-            const nextIndex =
-                current === null
-                    ? history.length - 1
-                    : Math.max(0, current - 1);
-            setAiHistoryCursor(nextIndex);
-            setAiPanelInput(history[nextIndex].text);
-            return;
-        }
-
-        if (current === null) return;
-        if (current >= history.length - 1) {
-            setAiHistoryCursor(null);
-            setAiPanelInput("");
-            return;
-        }
-        const nextIndex = current + 1;
-        setAiHistoryCursor(nextIndex);
-        setAiPanelInput(history[nextIndex].text);
-    }
-
-    function copyAiHistoryQuestion(text: string) {
-        void navigator.clipboard?.writeText(text).catch(() => {});
-    }
-
-    function pushAiPanelStatus(message: string) {
-        const stamp = new Date().toLocaleTimeString(undefined, {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-        });
-        setAiPanelOutput((current) => {
-            const line = `[${stamp}] ${message}`;
-            return current ? `${current}\n${line}` : line;
-        });
-    }
-
-    function disposeAiVoiceCapture() {
-        aiVoiceProcessor?.disconnect();
-        aiVoiceSource?.disconnect();
-        aiVoiceStream?.getTracks().forEach((track) => track.stop());
-        void aiVoiceAudioContext?.close().catch(() => {});
-        aiVoiceProcessor = null;
-        aiVoiceSource = null;
-        aiVoiceStream = null;
-        aiVoiceAudioContext = null;
-    }
-
-    async function startAiVoiceRecording() {
-        if (aiVoiceBusy() || aiVoiceRecording()) return;
-        const mediaDevices = navigator.mediaDevices;
-        if (!mediaDevices?.getUserMedia) {
-            pushAiPanelStatus(t("aiPanel.voiceUnsupported"));
-            return;
-        }
-        try {
-            const stream = await mediaDevices.getUserMedia({ audio: true });
-            aiVoiceStream = stream;
-            const AudioContextCtor =
-                window.AudioContext || (window as any).webkitAudioContext;
-            if (!AudioContextCtor)
-                throw new Error(t("aiPanel.voiceUnsupported"));
-            const audioContext = new AudioContextCtor({ sampleRate: 48000 });
-            const source = audioContext.createMediaStreamSource(stream);
-            const processor = audioContext.createScriptProcessor(4096, 1, 1);
-            aiVoiceSamples = [];
-            aiVoiceSampleRate = audioContext.sampleRate || 48000;
-            processor.onaudioprocess = (event) => {
-                if (!aiVoiceRecording()) return;
-                const input = event.inputBuffer.getChannelData(0);
-                aiVoiceSamples.push(new Float32Array(input));
-            };
-            source.connect(processor);
-            processor.connect(audioContext.destination);
-            aiVoiceAudioContext = audioContext;
-            aiVoiceSource = source;
-            aiVoiceProcessor = processor;
-            setAiVoiceRecording(true);
-            pushAiPanelStatus(t("aiPanel.voiceRecording"));
-        } catch (err: any) {
-            disposeAiVoiceCapture();
-            setAiVoiceRecording(false);
-            pushAiPanelStatus(err?.message || String(err));
-        }
-    }
-
-    async function stopAiVoiceRecording() {
-        if (!aiVoiceRecording()) return;
-        const chunks = aiVoiceSamples.slice();
-        const sampleRate = aiVoiceSampleRate;
-        setAiVoiceRecording(false);
-        disposeAiVoiceCapture();
-        if (!chunks.length) {
-            pushAiPanelStatus(t("aiPanel.voiceEmpty"));
-            return;
-        }
-        setAiVoiceBusy(true);
-        pushAiPanelStatus(t("aiPanel.voiceTranscribing"));
-        try {
-            const wavBuffer = encodeWav(chunks, sampleRate);
-            const text = await aiService.transcribeGrokAudio(
-                arrayBufferToBase64(wavBuffer),
-                `mindzj_recording_${aiAudioFileTimestamp()}.wav`,
-                "audio/wav",
-            );
-            if (!text) {
-                pushAiPanelStatus(t("aiPanel.voiceEmpty"));
-                return;
-            }
-            setAiHistoryCursor(null);
-            setAiPanelInput((current) => {
-                const prefix = current.trim()
-                    ? `${current}${current.endsWith("\n") ? "" : "\n"}`
-                    : "";
-                return `${prefix}${text}`;
-            });
-            pushAiPanelStatus(t("aiPanel.voiceInserted"));
-        } catch (err: any) {
-            pushAiPanelStatus(err?.message || String(err));
-        } finally {
-            setAiVoiceBusy(false);
-        }
-    }
-
-    function toggleAiVoiceRecording() {
-        if (aiVoiceRecording()) {
-            void stopAiVoiceRecording();
-            return;
-        }
-        void startAiVoiceRecording();
-    }
-
-    async function synthesizeAiPanelInput() {
-        const text = aiPanelInput().trim();
-        if (!text || aiPanelBusy() || aiVoiceBusy() || aiVoiceRecording())
-            return;
-        setAiVoiceBusy(true);
-        pushAiPanelStatus(t("aiPanel.ttsWorking"));
-        try {
-            const result = await aiService.synthesizeGrokSpeech(text);
-            pushAiPanelStatus(t("aiPanel.ttsExported", { path: result.path }));
-        } catch (err: any) {
-            pushAiPanelStatus(err?.message || String(err));
-        } finally {
-            setAiVoiceBusy(false);
-        }
-    }
-
-    onCleanup(() => disposeAiVoiceCapture());
-
-    function clampAiPanelHeight(value: number): number {
-        const max = Math.max(
-            AI_PANEL_MIN_HEIGHT,
-            Math.min(
-                Math.floor(window.innerHeight * 0.72),
-                window.innerHeight - 96,
-            ),
-        );
-        return Math.max(AI_PANEL_MIN_HEIGHT, Math.min(max, Math.round(value)));
-    }
-
-    function centerAiHistoryDialog(): Point {
-        const width = Math.min(520, Math.max(320, window.innerWidth - 32));
-        const height = Math.min(420, Math.max(280, window.innerHeight - 48));
-        return {
-            x: Math.max(12, Math.round((window.innerWidth - width) / 2)),
-            y: Math.max(12, Math.round((window.innerHeight - height) / 2)),
-        };
-    }
-
-    function toggleAiHistoryDialog() {
-        const next = !showAiHistory();
-        if (next && !aiHistoryPositionReady()) {
-            setAiHistoryPosition(centerAiHistoryDialog());
-            setAiHistoryPositionReady(true);
-        }
-        setShowAiHistory(next);
-    }
-
-    function closeAiHistoryDialog() {
-        setShowAiHistory(false);
-    }
-
-    function closeAiPanel() {
-        setShowAiPanel(false);
-        setShowAiHistory(false);
-    }
-
-    async function runAiPanelInstruction() {
-        const instruction = aiPanelInput().trim();
-        if (!instruction || aiPanelBusy()) return;
-        recordAiQuestion(instruction);
-        setAiPanelBusy(true);
-        const progressLines: string[] = [];
-        let lastProgressMessage = "";
-        const pushProgress = (phase: string, message: string) => {
-            lastProgressMessage = message;
-            const stamp = new Date().toLocaleTimeString(undefined, {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-            });
-            const labels: Record<string, string> = {
-                request: "请求",
-                "tool-call": "工具",
-                "tool-result": "结果",
-                message: "消息",
-                done: "完成",
-                error: "错误",
-            };
-            progressLines.push(
-                `[${stamp}] ${labels[phase] ?? phase}: ${message}`,
-            );
-            setAiPanelOutput(progressLines.join("\n"));
-        };
-        pushProgress("message", t("aiPanel.working"));
-        try {
-            const result = await aiService.runInstruction(instruction, {
-                restrictToActiveFile: true,
-                onProgress: (event) => pushProgress(event.phase, event.message),
-            });
-            const finalText = result || t("aiPanel.done");
-            if (finalText && finalText !== lastProgressMessage) {
-                setAiPanelOutput([...progressLines, "", finalText].join("\n"));
-            }
-            setAiPanelInput("");
-            setAiHistoryCursor(null);
-        } catch (err: any) {
-            pushProgress("error", err?.message || String(err));
-        } finally {
-            setAiPanelBusy(false);
-        }
-    }
-
-    function selectAiPanelModel(value: string) {
-        const option = aiPanelModelOptions().find(
-            (item) => item.value === value,
-        );
-        if (!option) return;
-        void settingsStore.updateSetting("ai_provider", { ...option.config });
-    }
-
     function handleGlobalKeydown(e: KeyboardEvent) {
         // If the settings hotkey capture is active, let the HotkeysPanel handle the event.
         if ((window as any).__mindzj_hotkey_capturing) return;
 
-        if (showAiHistory() && e.key === "Escape") {
+        if (aiPanel.showAiHistory() && e.key === "Escape") {
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
-            closeAiHistoryDialog();
+            aiPanel.closeAiHistoryDialog();
             return;
         }
 
@@ -2548,7 +1711,7 @@ const App: Component = () => {
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
-            navigateAiQuestionHistory(e.key === "ArrowUp" ? "prev" : "next");
+            aiPanel.navigateAiQuestionHistory(e.key === "ArrowUp" ? "prev" : "next");
             return;
         }
 
@@ -2563,7 +1726,7 @@ const App: Component = () => {
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
-            setShowAiPanel((value) => !value);
+            aiPanel.setShowAiPanel((value) => !value);
             return;
         }
 
@@ -2902,7 +2065,7 @@ const App: Component = () => {
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
-            startScreenshot();
+            screenshot.startScreenshot();
             return;
         }
 
@@ -3632,7 +2795,7 @@ const App: Component = () => {
                                             }}
                                             onOpenSplit={handleOpenSplitInPane}
                                             onExportPdf={(path: string) => {
-                                                void exportMarkdownPathToPdf(path);
+                                                void pdfExport.exportMarkdownPathToPdf(path);
                                             }}
                                             activePath={
                                                 vaultStore.activeFile()?.path ??
@@ -3942,7 +3105,7 @@ const App: Component = () => {
                                         }
                                         onOpenSplit={handleOpenSplitInPane}
                                         onExportPdf={(path) =>
-                                            void exportMarkdownPathToPdf(path)
+                                            void pdfExport.exportMarkdownPathToPdf(path)
                                         }
                                         onReorder={(from: number, to: number) =>
                                             vaultStore.reorderOpenFiles(
@@ -4069,53 +3232,53 @@ const App: Component = () => {
                                     onSplitRatioChange={setSplitRatio}
                                 />
                             </Show>
-                            <Show when={showAiPanel()}>
+                            <Show when={aiPanel.showAiPanel()}>
                                 <AiBottomPanel
-                                    input={aiPanelInput()}
-                                    output={aiPanelOutput()}
-                                    busy={aiPanelBusy()}
-                                    voiceRecording={aiVoiceRecording()}
-                                    voiceBusy={aiVoiceBusy()}
-                                    height={aiPanelHeight()}
+                                    input={aiPanel.aiPanelInput()}
+                                    output={aiPanel.aiPanelOutput()}
+                                    busy={aiPanel.aiPanelBusy()}
+                                    voiceRecording={aiPanel.aiVoiceRecording()}
+                                    voiceBusy={aiPanel.aiVoiceBusy()}
+                                    height={aiPanel.aiPanelHeight()}
                                     activePath={
                                         activePanePath() ??
                                         vaultStore.activeFile()?.path ??
                                         null
                                     }
-                                    modelLabel={currentAiModelLabel()}
-                                    modelOptions={aiPanelModelOptions()}
-                                    activeModelValue={currentAiModelOptionValue()}
-                                    historyOpen={showAiHistory()}
-                                    historyPosition={aiHistoryPosition()}
-                                    historyDates={aiHistoryDates()}
-                                    historyDate={aiHistoryDate()}
-                                    historyEntries={selectedAiHistoryEntries()}
+                                    modelLabel={aiPanel.currentAiModelLabel()}
+                                    modelOptions={aiPanel.aiPanelModelOptions()}
+                                    activeModelValue={aiPanel.currentAiModelOptionValue()}
+                                    historyOpen={aiPanel.showAiHistory()}
+                                    historyPosition={aiPanel.aiHistoryPosition()}
+                                    historyDates={aiPanel.aiHistoryDates()}
+                                    historyDate={aiPanel.aiHistoryDate()}
+                                    historyEntries={aiPanel.selectedAiHistoryEntries()}
                                     onHeightChange={(height) =>
-                                        setAiPanelHeight(
-                                            clampAiPanelHeight(height),
+                                        aiPanel.setAiPanelHeight(
+                                            aiPanel.clampAiPanelHeight(height),
                                         )
                                     }
-                                    onSelectModel={selectAiPanelModel}
-                                    onInput={handleAiPanelInput}
-                                    onRun={() => void runAiPanelInstruction()}
-                                    onToggleVoiceInput={toggleAiVoiceRecording}
+                                    onSelectModel={aiPanel.selectAiPanelModel}
+                                    onInput={aiPanel.handleAiPanelInput}
+                                    onRun={() => void aiPanel.runAiPanelInstruction()}
+                                    onToggleVoiceInput={aiPanel.toggleAiVoiceRecording}
                                     onSpeakInput={() =>
-                                        void synthesizeAiPanelInput()
+                                        void aiPanel.synthesizeAiPanelInput()
                                     }
-                                    onToggleHistory={toggleAiHistoryDialog}
-                                    onCloseHistory={closeAiHistoryDialog}
-                                    onMoveHistory={setAiHistoryPosition}
-                                    onSelectHistoryDate={setAiHistoryDate}
-                                    onDeleteHistoryEntry={deleteAiHistoryEntry}
+                                    onToggleHistory={aiPanel.toggleAiHistoryDialog}
+                                    onCloseHistory={aiPanel.closeAiHistoryDialog}
+                                    onMoveHistory={aiPanel.setAiHistoryPosition}
+                                    onSelectHistoryDate={aiPanel.setAiHistoryDate}
+                                    onDeleteHistoryEntry={aiPanel.deleteAiHistoryEntry}
                                     onClearHistoryDate={
-                                        clearAiHistoryForSelectedDate
+                                        aiPanel.clearAiHistoryForSelectedDate
                                     }
-                                    onClearAllHistory={clearAllAiHistory}
-                                    onCopyHistoryEntry={copyAiHistoryQuestion}
+                                    onClearAllHistory={aiPanel.clearAllAiHistory}
+                                    onCopyHistoryEntry={aiPanel.copyAiHistoryQuestion}
                                     onNavigateHistory={
-                                        navigateAiQuestionHistory
+                                        aiPanel.navigateAiQuestionHistory
                                     }
-                                    onClose={closeAiPanel}
+                                    onClose={aiPanel.closeAiPanel}
                                 />
                             </Show>
                         </Show>
@@ -4136,11 +3299,11 @@ const App: Component = () => {
             <Show when={showSettings()}>
                 <SettingsModal onClose={() => setShowSettings(false)} />
             </Show>
-            <Show when={screenshotData()}>
+            <Show when={screenshot.screenshotData()}>
                 <ScreenshotOverlay
-                    screenshotBase64={screenshotData()!}
-                    onClose={() => setScreenshotData(null)}
-                    onSave={handleScreenshotSave}
+                    screenshotBase64={screenshot.screenshotData()!}
+                    onClose={() => screenshot.setScreenshotData(null)}
+                    onSave={screenshot.handleScreenshotSave}
                 />
             </Show>
             {/* Ephemeral shortcut toast — auto-fades after ~1.2s. Used
