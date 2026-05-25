@@ -34,6 +34,7 @@ import {
   looksLikeToolFailureSummary,
 } from "./ai/tools";
 
+const MAX_TOOL_LOOP_STEPS = 8;
 type AiModelOption = { value: string; label: string };
 type AiTextToSpeechResult = { path: string; fileName: string };
 
@@ -457,7 +458,7 @@ function createAiService() {
     ];
     const executed: string[] = [];
 
-    for (let step = 0; step < 8; step++) {
+    for (let step = 0; step < MAX_TOOL_LOOP_STEPS; step++) {
       emitProgress(options, "request", step === 0 ? "Sending instruction to AI model." : "Sending tool results back to AI model.");
       const data = await chatCompletionRequest(config, messages, apiKey);
       const choice = data?.choices?.[0];

@@ -609,11 +609,7 @@ pub async fn read_binary_file(
     relative_path: String,
 ) -> Result<String, CommandError> {
     let ctx = state.get_vault_context(window.label())?;
-    let abs_path = ctx.vault.root().join(&relative_path);
-    let data = std::fs::read(&abs_path).map_err(|e| CommandError {
-        code: "IO_ERROR".into(),
-        message: format!("Failed to read binary file '{}': {}", relative_path, e),
-    })?;
+    let data = ctx.vault.read_binary(&relative_path).map_err(CommandError::from)?;
     Ok(base64::engine::general_purpose::STANDARD.encode(data))
 }
 

@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { WorkspaceState } from "../types";
 
+const WORKSPACE_SAVE_DEBOUNCE_MS = 1000;
+
 export type { WorkspaceState } from "../types";
 
 const DEFAULT_WORKSPACE: WorkspaceState = {
@@ -57,5 +59,5 @@ export function scheduleSave(partial?: Partial<WorkspaceState>): void {
         workspace = { ...workspace, ...partial };
     }
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => saveWorkspace(), 1000);
+    saveTimer = setTimeout(() => saveWorkspace(), WORKSPACE_SAVE_DEBOUNCE_MS);
 }

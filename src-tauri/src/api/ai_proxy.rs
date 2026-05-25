@@ -4,6 +4,7 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::net::{IpAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use tauri::Manager;
 
@@ -49,17 +50,102 @@ pub struct AiTextToSpeechResult {
     file_name: String,
 }
 
-fn validate_ai_url(url: &str) -> Result<(), CommandError> {
+pub fn validate_ai_url(url: &str) -> Result<(), CommandError> {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return Err(CommandError {
             code: "INVALID_AI_ENDPOINT".into(),
             message: "AI endpoint must start with http:// or https://".into(),
         });
     }
+
+    let parsed = url::Url::parse(url).map_err(|_| CommandError {
+        code: "INVALID_AI_ENDPOINT".into(),
+        message: "Invalid URL format".into(),
+    })?;
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| CommandError {
+            code: "INVALID_AI_ENDPOINT".into(),
+            message: "URL has no host".into(),
+        })?
+        .to_ascii_lowercase();
+
+    // Block reserved / loopback hostnames
+    if matches!(
+        host.as_str(),
+        "localhost" | "127.0.0.1" | "0.0.0.0" | "::1" | "[::1]"
+    ) {
+        return Err(CommandError {
+            code: "INVALID_AI_ENDPOINT".into(),
+            message: "Requests to loopback addresses are not allowed".into(),
+        });
+    }
+
+    // Block cloud metadata endpoint
+    if host == "169.254.169.254" {
+        return Err(CommandError {
+            code: "INVALID_AI_ENDPOINT".into(),
+            message: "Requests to cloud metadata endpoint are not allowed".into(),
+        });
+    }
+
+    // If the host parses as an IP, check private / link-local ranges
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        let blocked = match ip {
+            IpAddr::V4(v4) => {
+                v4.is_loopback()
+                    || v4.is_private()
+                    || v4.is_link_local()
+                    || v4.is_broadcast()
+                    || v4.is_unspecified()
+                    || (v4.octets()[0] == 169 && v4.octets()[1] == 254)
+            }
+            IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified() || v6.segments()[0] & 0xffc0 == 0xfe80,
+        };
+        if blocked {
+            return Err(CommandError {
+                code: "INVALID_AI_ENDPOINT".into(),
+                message: "Requests to private / reserved IP addresses are not allowed".into(),
+            });
+        }
+    }
+
+    // DNS rebinding protection: resolve hostnames and check resolved IPs.
+    // If DNS resolution fails (e.g. internal hostname, network down), allow —
+    // no rebinding risk if the domain can't resolve in the first place.
+    if host.parse::<IpAddr>().is_err() {
+        let port = parsed.port_or_known_default().unwrap_or(443);
+        if let Ok(addrs) = (host.as_str(), port).to_socket_addrs() {
+            for addr in addrs {
+                let ip = addr.ip();
+                let blocked = match ip {
+                    IpAddr::V4(v4) => {
+                        v4.is_loopback()
+                            || v4.is_private()
+                            || v4.is_link_local()
+                            || v4.is_broadcast()
+                            || v4.is_unspecified()
+                            || (v4.octets()[0] == 169 && v4.octets()[1] == 254)
+                    }
+                    IpAddr::V6(v6) => {
+                        v6.is_loopback() || v6.is_unspecified() || v6.segments()[0] & 0xffc0 == 0xfe80
+                    }
+                };
+                if blocked {
+                    return Err(CommandError {
+                        code: "INVALID_AI_ENDPOINT".into(),
+                        message: "Resolved IP address is in a private / reserved range".into(),
+                    });
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
-fn build_ai_headers(
+pub fn build_ai_headers(
     custom_headers: Option<HashMap<String, String>>,
     include_content_type: bool,
 ) -> Result<HeaderMap, CommandError> {
@@ -84,7 +170,7 @@ fn build_ai_headers(
     Ok(headers)
 }
 
-fn ai_provider_status_error(status: reqwest::StatusCode, text: String) -> CommandError {
+pub fn ai_provider_status_error(status: reqwest::StatusCode, text: String) -> CommandError {
     CommandError {
         code: "AI_PROVIDER_ERROR".into(),
         message: format!(
@@ -123,7 +209,7 @@ fn resolve_audio_output_dir(
     default_audio_output_dir(app)
 }
 
-fn sanitize_audio_file_name(raw: Option<String>) -> String {
+pub fn sanitize_audio_file_name(raw: Option<String>) -> String {
     let fallback = format!(
         "mindzj_grok_tts_{}.mp3",
         chrono::Local::now().format("%Y%m%d_%H%M%S")

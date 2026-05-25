@@ -1,4 +1,4 @@
-mod api;
+pub mod api;
 pub mod kernel;
 // Kept on disk for reference / rollback but NOT installed at startup.
 // The low-level WH_KEYBOARD_LL hook used to install here was the only

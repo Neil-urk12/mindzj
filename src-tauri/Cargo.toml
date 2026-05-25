@@ -73,6 +73,7 @@ rand = "=0.8.6"
 
 # URL encoding for window params
 urlencoding = "=2.1.3"
+url = "2.5"
 
 # Keyring (system credential storage for API keys)
 keyring = "=3.6.3"

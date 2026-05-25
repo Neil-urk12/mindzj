@@ -3254,6 +3254,7 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "ts-rs",
+ "url",
  "urlencoding",
  "uuid",
  "webview2-com",

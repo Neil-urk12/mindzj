@@ -2,11 +2,10 @@ use crate::error::{KernelError, KernelResult};
 use crate::types::{AppSettings, FileContent, FileMetadata, VaultEntry, VaultInfo};
 use chrono::Utc;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::RwLock;
 use tracing::{info, warn};
 
 /// Maximum number of file snapshots to keep per file for recovery.
@@ -31,9 +30,6 @@ pub struct Vault {
     root: PathBuf,
     /// Write lock to ensure atomic file operations
     write_lock: RwLock<()>,
-    /// In-memory cache of file metadata (path -> metadata)
-    #[allow(dead_code)]
-    metadata_cache: Arc<RwLock<HashMap<String, FileMetadata>>>,
 }
 
 impl Vault {
@@ -171,7 +167,6 @@ impl Vault {
             info,
             root,
             write_lock: RwLock::new(()),
-            metadata_cache: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -735,6 +730,26 @@ impl Vault {
         })
     }
 
+    /// Read raw bytes from a file (for images and other binary data).
+    /// Uses path traversal protection via `resolve_safe_path`.
+    pub fn read_binary(&self, relative_path: &str) -> KernelResult<Vec<u8>> {
+        let abs_path = self.resolve_safe_path(relative_path)?;
+
+        if !abs_path.exists() {
+            return Err(KernelError::FileNotFound(relative_path.to_string()));
+        }
+
+        if !abs_path.is_file() {
+            return Err(KernelError::FileNotFound(format!(
+                "'{}' is not a file",
+                relative_path
+            )));
+        }
+
+        let data = fs::read(&abs_path)?;
+        Ok(data)
+    }
+
     /// Write raw bytes to a file (for images and other binary data).
     /// Uses the same atomic-write strategy as `write_file`.
     pub fn write_binary(&self, relative_path: &str, data: &[u8]) -> KernelResult<()> {
@@ -929,7 +944,7 @@ impl Vault {
         }
 
         let content = fs::read(&abs_path)?;
-        let timestamp = Utc::now().format("%Y%m%d_%H%M%S%.3f");
+        let timestamp = Utc::now().format("%Y%m%d_%H%M%S%.9f");
 
         // Encode the file path into a safe snapshot name
         let safe_name = relative_path.replace('/', "__");

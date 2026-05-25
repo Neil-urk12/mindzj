@@ -119,10 +119,4 @@ impl VaultWatcher {
         }
     }
 
-    /// Register a path as a self-write (to suppress echo watcher events).
-    /// Not currently wired, but available for future use.
-    #[allow(dead_code)]
-    pub fn register_self_write(&self, _path: &Path) {
-        // Would need access to self_writes Arc - future enhancement
-    }
 }

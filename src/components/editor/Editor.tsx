@@ -69,6 +69,7 @@ import {
     toggleBlockquote,
 } from "./extensions/config";
 
+const SCROLL_THROTTLE_MS = 80;
 interface EditorProps {
     file?: ReturnType<typeof vaultStore.activeFile>;
     viewMode?: ViewMode;
@@ -518,7 +519,7 @@ export const Editor: Component<EditorProps> = (props) => {
                 if (editorView === view) {
                     rememberEditorViewport(view);
                 }
-            }, 80);
+            }, SCROLL_THROTTLE_MS);
         };
         view.scrollDOM.addEventListener("scroll", handler, { passive: true });
         activeScrollHandler = handler;
