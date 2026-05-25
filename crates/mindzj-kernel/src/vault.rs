@@ -108,7 +108,7 @@ impl Vault {
         // Canonicalize to resolve symlinks and get absolute path
         let root = root
             .canonicalize()
-            .map_err(|e| KernelError::Io(e))?;
+            .map_err(KernelError::Io)?;
 
         // Create .mindzj config directory with full structure
         let config_dir = root.join(VAULT_CONFIG_DIR);
@@ -580,7 +580,7 @@ impl Vault {
         if dest.exists() && !overwrite {
             return Err(KernelError::FileAlreadyExists(file_name));
         }
-        let bytes = fs::read(&src)?;
+        let bytes = fs::read(src)?;
         fs::write(&dest, &bytes)?;
         Ok(file_name)
     }
@@ -691,10 +691,7 @@ impl Vault {
         let _lock = self
             .write_lock
             .write()
-            .map_err(|_| KernelError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Write lock poisoned",
-            )))?;
+            .map_err(|_| KernelError::Io(std::io::Error::other("Write lock poisoned")))?;
 
         // Step 1: Write to temporary file
         let tmp_name = format!(
@@ -781,10 +778,7 @@ impl Vault {
         let _lock = self
             .write_lock
             .write()
-            .map_err(|_| KernelError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Write lock poisoned",
-            )))?;
+            .map_err(|_| KernelError::Io(std::io::Error::other("Write lock poisoned")))?;
 
         let tmp_name = format!(
             ".~{}.tmp",
@@ -835,10 +829,7 @@ impl Vault {
         }
 
         let _lock = self.write_lock.write().map_err(|_| {
-            KernelError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Write lock poisoned",
-            ))
+            KernelError::Io(std::io::Error::other("Write lock poisoned"))
         })?;
 
         fs::remove_file(&abs_path)?;
@@ -877,10 +868,7 @@ impl Vault {
         }
 
         let _lock = self.write_lock.write().map_err(|_| {
-            KernelError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Write lock poisoned",
-            ))
+            KernelError::Io(std::io::Error::other("Write lock poisoned"))
         })?;
 
         if same_existing_entry {

@@ -70,7 +70,7 @@ fn is_blocked_ip(ip: IpAddr) -> bool {
                 || v6.is_unspecified()
                 || v6.segments()[0] & 0xffc0 == 0xfe80 // link-local fe80::/10
                 || (v6.segments()[0] & 0xfe00) == 0xfc00 // unique-local fc00::/7
-                || v6.to_ipv4().map_or(false, is_blocked_v4) // IPv4-mapped/compatible
+                || v6.to_ipv4().is_some_and(is_blocked_v4) // IPv4-mapped/compatible
         }
     }
 }

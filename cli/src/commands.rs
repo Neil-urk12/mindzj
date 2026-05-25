@@ -643,7 +643,7 @@ pub fn api_key_create(vault_path: &Path, format: OutputFormat) -> Result<()> {
     // Generate API key using kernel's crypto
     use rand::Rng;
     let key_bytes: [u8; 16] = rand::thread_rng().gen();
-    let api_key = format!("mzk_{}", hex::encode(&key_bytes));
+    let api_key = format!("mzk_{}", hex::encode(key_bytes));
 
     // Hash the key for storage
     use sha2::{Digest, Sha256};

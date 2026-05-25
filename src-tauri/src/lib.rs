@@ -830,7 +830,7 @@ pub fn run() {
                 apply_hires_icon(&main_window);
                 #[cfg(windows)]
                 disable_webview2_browser_accelerator_keys(&main_window);
-                if let Some(state) = load_window_state_sync(&app.handle()) {
+                if let Some(state) = load_window_state_sync(app.handle()) {
                     apply_window_state(&main_window, &state);
                 } else {
                     // No persisted window state — this is either

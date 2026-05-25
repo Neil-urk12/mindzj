@@ -274,7 +274,7 @@ pub async fn set_font_size(
     window: tauri::WebviewWindow,
     size: u32,
 ) -> Result<(), CommandError> {
-    if size < 8 || size > 72 {
+    if !(8..=72).contains(&size) {
         return Err(CommandError {
             code: "INVALID_VALUE".into(),
             message: "Font size must be between 8 and 72".into(),

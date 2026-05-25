@@ -404,17 +404,15 @@ impl Default for AppSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[ts(export)]
 pub enum NewNoteLocation {
+    #[default]
     VaultRoot,
     SameFolder,
     Custom(String),
 }
 
-impl Default for NewNoteLocation {
-    fn default() -> Self { Self::VaultRoot }
-}
 
 // ---------------------------------------------------------------------------
 // Workspace types
@@ -603,7 +601,7 @@ pub enum AiProviderType {
 // Global window state (not per-vault — shared across all vaults)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct GlobalWindowState {
     #[serde(default)]
@@ -618,17 +616,6 @@ pub struct GlobalWindowState {
     pub maximized: Option<bool>,
 }
 
-impl Default for GlobalWindowState {
-    fn default() -> Self {
-        Self {
-            x: None,
-            y: None,
-            width: None,
-            height: None,
-            maximized: None,
-        }
-    }
-}
 
 /// Vault directory structure constants — single source of truth.
 /// Mirrored in `src/constants/vaultPaths.ts` for the frontend.

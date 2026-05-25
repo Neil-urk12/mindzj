@@ -7,6 +7,7 @@ use tracing::info;
 ///
 /// Phase 1 uses a simple in-memory inverted index.
 /// Phase 3 will migrate to tantivy for production-grade search.
+#[derive(Default)]
 pub struct SearchIndex {
     /// file_path -> file content (for snippet extraction)
     documents: HashMap<String, String>,

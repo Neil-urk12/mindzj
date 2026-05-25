@@ -7,8 +7,8 @@ use std::collections::HashMap;
 /// links in that file and updates both forward and backward indices.
 /// The index is kept in memory for fast lookup and serialized to
 /// `.mindzj/link-index.json` for persistence across sessions.
+#[derive(Default)]
 pub struct LinkIndex {
-    /// Forward links: source file path -> list of links found in that file
     forward: HashMap<String, Vec<NoteLink>>,
     /// Backward links: target file path -> list of links pointing to it
     backward: HashMap<String, Vec<NoteLink>>,
@@ -63,7 +63,7 @@ impl LinkIndex {
         for link in &links {
             self.backward
                 .entry(link.target.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(link.clone());
         }
 

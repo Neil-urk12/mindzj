@@ -474,14 +474,11 @@ pub async fn rename_file(
         .rename_file(&from, &to)
         .map_err(CommandError::from)?;
 
-    // Update indexes: remove old path, register new path
+    // Update indexes: read new path first, then remove old path — avoids
+    // index corruption if read_file fails after the rename has already succeeded.
+    let content = ctx.vault.read_file(&to).map_err(CommandError::from)?;
     ctx.on_file_deleted(&from);
-    let content = ctx
-        .vault
-        .read_file(&to)
-        .map(|fc| fc.content)
-        .unwrap_or_default();
-    ctx.on_file_changed(&to, &content);
+    ctx.on_file_changed(&to, &content.content);
 
     Ok(())
 }
@@ -864,4 +861,64 @@ pub async fn get_themes_dir(
         .themes_dir()
         .map(|p| p.to_string_lossy().to_string())
         .map_err(CommandError::from)
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::kernel::vault::Vault;
+    use crate::kernel::VaultContext;
+    use tempfile::TempDir;
+
+    /// Exact replica of the rename_file Tauri command logic,
+    /// extracted for unit-testability without a Tauri runtime.
+    fn rename_file_with_index_update(
+        ctx: &VaultContext,
+        from: &str,
+        to: &str,
+    ) -> Result<(), CommandError> {
+        ctx.vault.rename_file(from, to).map_err(CommandError::from)?;
+
+        // Update indexes: read new path first, then remove old path — avoids
+        // index corruption if read_file fails after the rename has already succeeded.
+        let content = ctx.vault.read_file(to).map_err(CommandError::from)?;
+        ctx.on_file_deleted(from);
+        ctx.on_file_changed(to, &content.content);
+
+        Ok(())
+    }
+
+    /// Regression test: rename_file must propagate read_file errors.
+    ///
+    /// When the filesystem rename succeeds but the subsequent `read_file`
+    /// fails (e.g. non-UTF-8 content, permission race, external deletion),
+    /// the error must reach the caller.
+    /// (old path removed from index, new path registered with empty content).
+    ///
+    /// Verifies the fix: `.unwrap_or_default()` was replaced with `?` so
+    #[test]
+    fn test_rename_file_propagates_read_error() {
+        let tmp = TempDir::new().unwrap();
+        let vault = Vault::open(tmp.path(), "test").unwrap();
+        let ctx = VaultContext::new(vault);
+
+        // Write a file with invalid UTF-8 bytes directly to the vault.
+        // `Vault.rename_file` only does an `fs::rename` (succeeds),
+        // but `Vault.read_file` uses `fs::read_to_string` which fails
+        // on non-UTF-8 content with `ErrorKind::InvalidData`.
+        let invalid_utf8: &[u8] = &[0xFF, 0xFE, 0x80, 0x01];
+        std::fs::write(tmp.path().join("bad_encoding.md"), invalid_utf8).unwrap();
+
+        let result = rename_file_with_index_update(&ctx, "bad_encoding.md", "renamed.md");
+
+        // Verify error propagated from `read_file` via `?` operator.
+        assert!(
+            result.is_err(),
+            "rename_file should propagate read_file errors to caller, but got Ok(())"
+        );
+    }
 }

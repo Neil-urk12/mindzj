@@ -27,7 +27,7 @@ use mindzj_kernel::vault::Vault;
 /// Central application state shared across all Tauri commands.
 ///
 /// Supports multiple simultaneous vaults — each Tauri window is mapped to
-/// exactly one vault via `window_vault_map`.
+#[derive(Default)]
 pub struct AppState {
     /// Open vaults keyed by canonicalized path string.
     pub vaults: RwLock<HashMap<String, Arc<VaultContext>>>,
@@ -40,14 +40,8 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Create a new AppState with no open vaults.
     pub fn new() -> Self {
-        Self {
-            vaults: RwLock::new(HashMap::new()),
-            window_vault_map: RwLock::new(HashMap::new()),
-            recent_vaults: std::sync::Mutex::new(Vec::new()),
-            watchers: RwLock::new(HashMap::new()),
-        }
+        Self::default()
     }
 
     /// Open a vault and associate it with the calling window.
@@ -64,17 +58,11 @@ impl AppState {
         // Reuse existing context if the same vault is already open
         {
             let vaults = self.vaults.read().map_err(|_| {
-                KernelError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Vaults lock poisoned",
-                ))
+                KernelError::Io(std::io::Error::other("Vaults lock poisoned"))
             })?;
             if let Some(ctx) = vaults.get(&key) {
                 let mut map = self.window_vault_map.write().map_err(|_| {
-                    KernelError::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Window map lock poisoned",
-                    ))
+                    KernelError::Io(std::io::Error::other("Window map lock poisoned"))
                 })?;
                 map.insert(window_label.to_string(), key);
                 return Ok((vault_info, ctx.clone()));
@@ -93,10 +81,7 @@ impl AppState {
         // Store the vault context
         {
             let mut vaults = self.vaults.write().map_err(|_| {
-                KernelError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Vaults lock poisoned",
-                ))
+                KernelError::Io(std::io::Error::other("Vaults lock poisoned"))
             })?;
             vaults.insert(key.clone(), ctx.clone());
         }
@@ -104,10 +89,7 @@ impl AppState {
         // Map this window to the vault
         {
             let mut map = self.window_vault_map.write().map_err(|_| {
-                KernelError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Window map lock poisoned",
-                ))
+                KernelError::Io(std::io::Error::other("Window map lock poisoned"))
             })?;
             map.insert(window_label.to_string(), key.clone());
         }
@@ -115,10 +97,7 @@ impl AppState {
         // Initialize watcher slot
         {
             let mut watchers = self.watchers.write().map_err(|_| {
-                KernelError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Watchers lock poisoned",
-                ))
+                KernelError::Io(std::io::Error::other("Watchers lock poisoned"))
             })?;
             watchers.insert(key.clone(), Arc::new(std::sync::Mutex::new(None)));
         }
