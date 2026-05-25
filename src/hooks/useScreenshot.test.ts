@@ -6,27 +6,27 @@ import { createRoot } from "solid-js";
 
 const mockInvoke = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
-    invoke: (...args: unknown[]) => mockInvoke(...args),
+    invoke: (...args: [string]) => mockInvoke(...args),
 }));
 
-const mockRegister = vi.fn(() => Promise.resolve());
-const mockUnregister = vi.fn(() => Promise.resolve());
+const mockRegister = vi.fn<(...args: any[]) => Promise<void>>(() => Promise.resolve());
+const mockUnregister = vi.fn<(...args: any[]) => Promise<void>>(() => Promise.resolve());
 vi.mock("@tauri-apps/plugin-global-shortcut", () => ({
-    register: (...args: unknown[]) => mockRegister(...args),
-    unregister: (...args: unknown[]) => mockUnregister(...args),
+    register: (...args: [string, () => void]) => mockRegister(...args),
+    unregister: (...args: [string]) => mockUnregister(...args),
 }));
 
-const mockActiveFile = vi.fn(() => null);
+const mockActiveFile = vi.fn((): { path: string } | null => null);
 vi.mock("../stores/vault", () => ({
     vaultStore: {
-        activeFile: (...args: unknown[]) => mockActiveFile(...args) as { path: string } | null,
+        activeFile: () => mockActiveFile() as { path: string } | null,
     },
 }));
 
 const mockSettings = vi.fn(() => ({}));
 vi.mock("../stores/settings", () => ({
     settingsStore: {
-        settings: (...args: unknown[]) => mockSettings(...args),
+        settings: () => mockSettings(),
     },
 }));
 
@@ -328,34 +328,38 @@ describe("useScreenshot", () => {
     // adding `resolve.conditions: ['browser']` to the vitest config.
 
     describe("global shortcut", () => {
-        it.skip("registers Alt+G via createEffect on mount", async () => {
+        it("registers Alt+G via createEffect on mount", async () => {
+            let disposeRoot: () => void;
             createRoot((dispose) => {
+                disposeRoot = dispose;
                 useScreenshot({ showToast: vi.fn() });
-                dispose();
             });
             await flush();
             expect(mockRegister).toHaveBeenCalledWith(
                 "Alt+G",
                 expect.any(Function),
             );
+            disposeRoot!();
         });
 
-        it.skip("uses hotkey override via createEffect", async () => {
+        it("uses hotkey override via createEffect", async () => {
             mockSettings.mockReturnValue({
                 hotkey_overrides: { screenshot: "Ctrl+Shift+S" },
             });
+            let disposeRoot: () => void;
             createRoot((dispose) => {
+                disposeRoot = dispose;
                 useScreenshot({ showToast: vi.fn() });
-                dispose();
             });
             await flush();
             expect(mockRegister).toHaveBeenCalledWith(
                 "Ctrl+Shift+S",
                 expect.any(Function),
             );
+            disposeRoot!();
         });
 
-        it.skip("unregisters shortcut on cleanup via onCleanup", async () => {
+        it("unregisters shortcut on cleanup via onCleanup", async () => {
             let disposeRoot: () => void;
             createRoot((dispose) => {
                 disposeRoot = dispose;
