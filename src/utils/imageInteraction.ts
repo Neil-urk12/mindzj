@@ -21,7 +21,6 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { resolveImageAssetUrl } from "./vaultPaths";
 import { settingsStore } from "../stores/settings";
 import { openFileRouted } from "./openFileRouted";
 import { t } from "../i18n";

@@ -17,7 +17,7 @@
   <a href="#lizenz">Lizenz</a>
 </p>
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-0.1.7-blue" alt="Version" />
   <img src="https://img.shields.io/badge/lizenz-AGPL--3.0-green" alt="License" />
   <img src="https://img.shields.io/badge/Tauri-2.0-purple" alt="Tauri" />
   <img src="https://img.shields.io/badge/Plattform-Windows%20%26%20macOS%20%26%20Linux-orange" alt="Platform" />
