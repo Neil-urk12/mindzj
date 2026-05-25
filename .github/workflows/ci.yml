@@ -1,0 +1,201 @@
+# MindZJ CI workflow
+#
+# Runs linting, type-checking, and tests on every pull request and
+# every push to the protected branches (develop, main). Two parallel
+# jobs keep feedback fast:
+#
+#   frontend  — ESLint, tsc --noEmit, vitest
+#   rust      — cargo fmt, clippy, test, audit
+#
+# Security-audit steps (npm audit, cargo audit) run with
+# continue-on-error so they never block a PR — they surface
+# advisories for humans to triage, not hard gates.
+#
+# NOTE: For the concurrency/cancel-in-progress settings to work
+# correctly, enable branch protection rules on develop and main:
+#   - Require status checks to pass before merging
+#   - Require branches to be up to date before merging
+#   - Require pull request reviews before merging
+
+name: ci
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+    branches:
+      - develop
+      - main
+
+# Minimum permissions needed: read-only access to repo contents.
+# The workflow never writes to branches, packages, or releases.
+permissions:
+  contents: read
+
+# Cancel any in-progress run for the same branch / PR when a new
+# commit arrives. Prevents wasted runner minutes when a developer
+# force-pushes a fix shortly after opening a PR.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ────────────────────────────────────────────────────────────────
+  #  Job A: frontend lint, type-check, tests
+  # ────────────────────────────────────────────────────────────────
+  #
+  # Runs on ubuntu-24.04 for consistency with the release workflow.
+  # All three quality gates (lint, typecheck, test) must pass before
+  # the job reports green. npm audit runs last and is non-blocking.
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # corepack is the built-in Node mechanism for activating the
+      # package manager declared in package.json's "packageManager"
+      # field. It must run before setup-node so the pnpm binary is
+      # available for the cache step.
+      - name: Enable corepack
+        run: corepack enable
+
+      # Pin Node to the same version used by the release workflow to
+      # avoid "works in CI but not locally" drift.
+      - name: Setup Node 24.14.1
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24.14.1
+          cache: 'pnpm'
+
+      # --frozen-lockfile fails the install if pnpm-lock.yaml is
+      # out of sync with package.json — catches PRs that forgot to
+      # commit the lockfile update.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ESLint with project config. The "lint" script targets src/
+      # with .ts and .tsx extensions (see package.json).
+      - name: Lint (ESLint)
+        run: pnpm lint
+
+      # TypeScript compiler in no-emit mode — catches type errors
+      # without producing build artifacts.
+      - name: Type-check (tsc --noEmit)
+        run: pnpm typecheck
+
+      # Vitest in single-run mode (no watch). Fails on any test
+      # failure or unhandled rejection.
+      - name: Test (vitest)
+        run: pnpm test
+
+      # npm audit against the high+critical threshold. Non-blocking
+      # because transitive dependency advisories often appear before
+      # patches are available — this surfaces them for triage.
+      - name: Audit (npm)
+        if: success() || failure()
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Audit summary (npm)
+        if: success() || failure()
+        run: |
+          echo "## npm audit results" >> $GITHUB_STEP_SUMMARY
+          npm audit --audit-level=moderate 2>&1 >> $GITHUB_STEP_SUMMARY || true
+
+  # ────────────────────────────────────────────────────────────────
+  #  Job B: Rust fmt, clippy, test, audit
+  # ────────────────────────────────────────────────────────────────
+  #
+  # Runs on ubuntu-24.04 because the app depends on system libraries
+  # (WebKitGTK, PipeWire, libgbm, etc.) that are only available at
+  # the right versions on 24.04 — see the release workflow's matrix
+  # comment for the full PipeWire / libspa version story.
+  rust:
+    name: Rust
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Pin Rust to the same toolchain as the release workflow.
+      # dtolnay/rust-toolchain installs the exact version and makes
+      # it the default via rustup.
+      - name: Setup Rust 1.94.1
+        uses: dtolnay/rust-toolchain@aad518f59d88bae90133242f9ddac7f8bbc5dddf # 1.94.1
+        with:
+          components: rustfmt, clippy
+
+      # Cache the Cargo build artifacts. The workspaces path tells
+      # swatinem/rust-cache where the workspace root and target/
+      # directory live. The "linux" key scopes the cache to this
+      # platform — cross-platform build artifacts are incompatible.
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: './src-tauri -> target'
+          key: linux
+
+      # System libraries required at link time by the Tauri app and
+      # its native crate dependencies (xcap, libspa-sys, etc.).
+      # See the release workflow for the full per-library rationale.
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libpipewire-0.3-dev \
+            libgbm-dev \
+            libdrm-dev \
+            libclang-dev \
+            libegl-dev
+
+      # Formatting check — fails if any file is not rustfmt-formatted.
+      # Runs in the src-tauri workspace where Cargo.toml lives.
+      - name: Check formatting (cargo fmt)
+        run: cargo fmt --check
+        working-directory: src-tauri
+
+      # Lint with clippy. -D warnings promotes all warnings to errors
+      # so new warnings can't sneak past CI.
+      - name: Lint (cargo clippy)
+        run: cargo clippy --workspace -- -D warnings
+        working-directory: src-tauri
+
+      # Run all workspace tests.
+      - name: Test (cargo test)
+        run: cargo test --workspace
+        working-directory: src-tauri
+
+      # cargo-audit checks Cargo.lock against the RustSec advisory
+      # database. Install it first, then run — non-blocking because
+      # advisories in transitive deps may not have fixes yet.
+      - name: Install cargo-audit
+        if: success() || failure()
+        uses: taiki-e/install-action@d9be7d8cda89035c9c843f78bd44d4f72d8403d4 # v2.79.7
+        with:
+          tool: cargo-audit@0.20.7
+
+      - name: Audit (cargo audit)
+        if: success() || failure()
+        run: cargo audit
+        working-directory: src-tauri
+        continue-on-error: true
+
+      - name: Audit summary (cargo)
+        if: success() || failure()
+        run: |
+          echo "## cargo audit results" >> $GITHUB_STEP_SUMMARY
+          (cd src-tauri && cargo audit 2>&1) >> $GITHUB_STEP_SUMMARY || true
