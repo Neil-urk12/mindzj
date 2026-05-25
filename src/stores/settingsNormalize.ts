@@ -15,8 +15,6 @@ import type {
     HotkeyBinding,
 } from "../types";
 
-// Re-export for consumers that only need normalization types
-export type { AppSettings, AiProviderConfig, AiSkill, AiProviderType } from "../types";
 
 export const DEFAULT_FONT_FAMILY =
     '"Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", "Noto Sans", Ubuntu, Cantarell, sans-serif';
