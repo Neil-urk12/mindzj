@@ -15,30 +15,14 @@ function getScopedPluginLocalStorageKey(pluginId: string, key: string) {
 }
 export { getScopedPluginLocalStorageKey };
 
-// ---------------------------------------------------------------------------
-// Plugin data directory map
-// ---------------------------------------------------------------------------
-
-const pluginDataDirMap = new Map<string, string>();
-export { pluginDataDirMap };
-
-function getPluginDataDir(pluginId: string): string {
-    return pluginDataDirMap.get(pluginId) ?? pluginId;
-}
-export { getPluginDataDir };
-
-function setPluginDataDir(pluginId: string, dirName: string): void {
-    if (!dirName || dirName === ".." || dirName.includes("/") || dirName.includes("\\")) {
-        dirName = pluginId; // fallback to safe default
-    }
-    pluginDataDirMap.set(pluginId, dirName);
-}
-export { setPluginDataDir };
-
-function deletePluginDataDir(pluginId: string): void {
-    pluginDataDirMap.delete(pluginId);
-}
-export { deletePluginDataDir };
+// Plugin data directory map — re-exported from standalone module
+import {
+    getPluginDataDir,
+    setPluginDataDir,
+    deletePluginDataDir,
+    getAllPluginDataDirs,
+} from "../plugin-shim/plugin-data-dir";
+export { getPluginDataDir, setPluginDataDir, deletePluginDataDir, getAllPluginDataDirs };
 
 // ---------------------------------------------------------------------------
 // Types
@@ -799,7 +783,10 @@ function createPluginStore() {
                 .replace(/[\\/]+$/, "")
                 .split(/[\\/]/)
                 .pop() ?? id;
-        setPluginDataDir(id, dirName);
+        if (!setPluginDataDir(id, dirName)) {
+            console.error(`[Plugin] Refusing to load plugin with unsafe id: ${JSON.stringify(id)}`);
+            return;
+        }
 
         // 1. Inject CSS
         if (plugin.has_styles) {

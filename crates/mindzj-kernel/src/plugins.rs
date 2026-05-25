@@ -39,21 +39,37 @@ const CORE_PLUGIN_IDS: &[&str] = &[""];
 // Plugin filesystem operations
 // ---------------------------------------------------------------------------
 
+/// Validate a plugin ID to prevent path traversal and injection attacks.
+/// Only allows alphanumeric characters, dots, hyphens, and underscores.
+/// Rejects empty strings, `.` and `..`.
+fn validate_plugin_id(id: &str) -> Result<(), KernelError> {
+    if id.is_empty() || id == "." || id == ".."
+        || id.contains('/') || id.contains('\\') || id.contains('\0')
+        || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_')
+    {
+        return Err(KernelError::InvalidInput(format!("Invalid plugin id: {:?}", id)));
+    }
+    Ok(())
+}
 /// Find a plugin directory by ID. Searches `.mindzj/plugins/` for a folder
 /// whose `manifest.json` has a matching `id` field, or an exact folder name match.
-pub fn find_plugin_dir(vault_root: &Path, plugin_id: &str) -> Option<std::path::PathBuf> {
+pub fn find_plugin_dir(vault_root: &Path, plugin_id: &str) -> KernelResult<Option<std::path::PathBuf>> {
+    validate_plugin_id(plugin_id)?;
     let plugins_dir = vault_root.join(".mindzj").join("plugins");
     if !plugins_dir.exists() {
-        return None;
+        return Ok(None);
     }
 
     // Fast path: folder name exactly matches the requested id.
     let exact = plugins_dir.join(plugin_id);
     if exact.is_dir() {
-        return Some(exact);
+        return Ok(Some(exact));
     }
 
-    let entries = std::fs::read_dir(&plugins_dir).ok()?;
+    let entries = match std::fs::read_dir(&plugins_dir) {
+        Ok(e) => e,
+        Err(_) => return Ok(None),
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if !path.is_dir() {
@@ -76,11 +92,11 @@ pub fn find_plugin_dir(vault_root: &Path, plugin_id: &str) -> Option<std::path::
         };
 
         if manifest.id == plugin_id {
-            return Some(path);
+            return Ok(Some(path));
         }
     }
 
-    None
+    Ok(None)
 }
 
 /// Read the enabled plugins list from `.mindzj/plugins.json`.
@@ -183,6 +199,7 @@ pub fn list_plugins(vault_root: &Path) -> KernelResult<Vec<PluginInfo>> {
 
 /// Toggle a plugin's enabled state.
 pub fn toggle_plugin(vault_root: &Path, plugin_id: &str, enabled: bool) -> KernelResult<()> {
+    validate_plugin_id(plugin_id)?;
     let mut enabled_plugins = read_enabled_plugins(vault_root);
 
     if enabled {
@@ -198,7 +215,8 @@ pub fn toggle_plugin(vault_root: &Path, plugin_id: &str, enabled: bool) -> Kerne
 
 /// Delete a plugin from the filesystem.
 pub fn delete_plugin(vault_root: &Path, plugin_id: &str) -> KernelResult<()> {
-    let plugin_dir = find_plugin_dir(vault_root, plugin_id).unwrap_or_else(|| {
+    validate_plugin_id(plugin_id)?;
+    let plugin_dir = find_plugin_dir(vault_root, plugin_id)?.unwrap_or_else(|| {
         vault_root
             .join(".mindzj")
             .join("plugins")
@@ -219,7 +237,8 @@ pub fn delete_plugin(vault_root: &Path, plugin_id: &str) -> KernelResult<()> {
 
 /// Read the plugin main.js file content.
 pub fn read_plugin_main(vault_root: &Path, plugin_id: &str) -> KernelResult<String> {
-    let plugin_dir = find_plugin_dir(vault_root, plugin_id).ok_or_else(|| {
+    validate_plugin_id(plugin_id)?;
+    let plugin_dir = find_plugin_dir(vault_root, plugin_id)?.ok_or_else(|| {
         KernelError::FileNotFound(format!("Plugin directory not found for '{}'", plugin_id))
     })?;
     let main_path = plugin_dir.join("main.js");
@@ -228,7 +247,8 @@ pub fn read_plugin_main(vault_root: &Path, plugin_id: &str) -> KernelResult<Stri
 
 /// Read plugin styles.css content. Returns empty string if no styles.
 pub fn read_plugin_styles(vault_root: &Path, plugin_id: &str) -> KernelResult<String> {
-    let plugin_dir = find_plugin_dir(vault_root, plugin_id).ok_or_else(|| {
+    validate_plugin_id(plugin_id)?;
+    let plugin_dir = find_plugin_dir(vault_root, plugin_id)?.ok_or_else(|| {
         KernelError::FileNotFound(format!("Plugin directory not found for '{}'", plugin_id))
     })?;
     let styles_path = plugin_dir.join("styles.css");
@@ -343,5 +363,27 @@ mod tests {
         // Should be removed from enabled list
         let enabled = read_enabled_plugins(root);
         assert!(enabled.is_empty());
+    }
+
+    #[test]
+    fn test_validate_plugin_id_valid() {
+        assert!(validate_plugin_id("my-plugin").is_ok());
+        assert!(validate_plugin_id("plugin_name").is_ok());
+        assert!(validate_plugin_id("plugin.name").is_ok());
+        assert!(validate_plugin_id("Plugin123").is_ok());
+        assert!(validate_plugin_id("a").is_ok());
+    }
+
+    #[test]
+    fn test_validate_plugin_id_rejects_path_traversal() {
+        assert!(validate_plugin_id("../evil").is_err());
+        assert!(validate_plugin_id("..\\evil").is_err());
+        assert!(validate_plugin_id("good/../evil").is_err());
+        assert!(validate_plugin_id(".").is_err());
+        assert!(validate_plugin_id("..").is_err());
+        assert!(validate_plugin_id("").is_err());
+        assert!(validate_plugin_id("has space").is_err());
+        assert!(validate_plugin_id("has/slash").is_err());
+        assert!(validate_plugin_id("null\0injection").is_err());
     }
 }

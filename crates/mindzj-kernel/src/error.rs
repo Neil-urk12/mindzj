@@ -54,6 +54,9 @@ pub enum KernelError {
 
     #[error("File too large: {0}")]
     FileTooLarge(String),
+
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
 }
 
 /// Serializable error wrapper for Tauri command responses.
@@ -84,6 +87,7 @@ impl From<KernelError> for CommandError {
             KernelError::AiProvider(_) => "AI_PROVIDER_ERROR",
             KernelError::Config(_) => "CONFIG_ERROR",
             KernelError::FileTooLarge(_) => "FILE_TOO_LARGE",
+            KernelError::InvalidInput(_) => "INVALID_INPUT",
         };
         CommandError {
             code: code.to_string(),

@@ -26,9 +26,9 @@ import { EditorSelection } from "@codemirror/state";
 import { undo, redo } from "@codemirror/commands";
 import type { ViewMode } from "../stores/editor";
 
-// Plugin data directory map — re-exported from stores/plugins
-import { getPluginDataDir } from "../stores/plugins";
-export { getPluginDataDir };
+// Plugin data directory map — re-exported from standalone module
+import { getPluginDataDir, setPluginDataDir, deletePluginDataDir } from "./plugin-data-dir";
+export { getPluginDataDir, setPluginDataDir, deletePluginDataDir };
 
 // ---------------------------------------------------------------------------
 // Plugin Editor API — Obsidian-compatible editor surface for plugins
