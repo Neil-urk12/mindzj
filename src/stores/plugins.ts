@@ -5,8 +5,6 @@ import {
     installObsidianDomExtensions,
     createObsidianShim,
     createAppObject,
-    setPluginDataDir,
-    deletePluginDataDir,
 } from "../plugin-shim";
 
 function getScopedPluginLocalStorageKey(pluginId: string, key: string) {
@@ -16,6 +14,31 @@ function getScopedPluginLocalStorageKey(pluginId: string, key: string) {
     return `mindzj-vault-${vaultScope}-plugin-${pluginId}-${key}`;
 }
 export { getScopedPluginLocalStorageKey };
+
+// ---------------------------------------------------------------------------
+// Plugin data directory map
+// ---------------------------------------------------------------------------
+
+const pluginDataDirMap = new Map<string, string>();
+export { pluginDataDirMap };
+
+function getPluginDataDir(pluginId: string): string {
+    return pluginDataDirMap.get(pluginId) ?? pluginId;
+}
+export { getPluginDataDir };
+
+function setPluginDataDir(pluginId: string, dirName: string): void {
+    if (!dirName || dirName === ".." || dirName.includes("/") || dirName.includes("\\")) {
+        dirName = pluginId; // fallback to safe default
+    }
+    pluginDataDirMap.set(pluginId, dirName);
+}
+export { setPluginDataDir };
+
+function deletePluginDataDir(pluginId: string): void {
+    pluginDataDirMap.delete(pluginId);
+}
+export { deletePluginDataDir };
 
 // ---------------------------------------------------------------------------
 // Types

@@ -21,50 +21,19 @@ import {
     leafForPluginView,
 } from "../stores/plugins";
 import { type EditorView, EditorView as EditorViewClass } from "@codemirror/view";
+import { posToOffset, offsetToPos } from "./editorUtils";
 import { EditorSelection } from "@codemirror/state";
 import { undo, redo } from "@codemirror/commands";
 import type { ViewMode } from "../stores/editor";
 
-// ---------------------------------------------------------------------------
-// Plugin data directory map
-// ---------------------------------------------------------------------------
-
-const pluginDataDirMap = new Map<string, string>();
-
-export function getPluginDataDir(pluginId: string): string {
-    return pluginDataDirMap.get(pluginId) ?? pluginId;
-}
-
-export function setPluginDataDir(pluginId: string, dirName: string): void {
-    pluginDataDirMap.set(pluginId, dirName);
-}
-
-export function deletePluginDataDir(pluginId: string): void {
-    pluginDataDirMap.delete(pluginId);
-}
+// Plugin data directory map — re-exported from stores/plugins
+import { getPluginDataDir } from "../stores/plugins";
+export { getPluginDataDir };
 
 // ---------------------------------------------------------------------------
 // Plugin Editor API — Obsidian-compatible editor surface for plugins
 // ---------------------------------------------------------------------------
 
-function posToOffset(
-    view: EditorView,
-    pos: { line: number; ch: number },
-): number {
-    const lineNum = Math.max(1, Math.min(view.state.doc.lines, pos.line + 1));
-    const line = view.state.doc.line(lineNum);
-    return Math.min(line.to, line.from + Math.max(0, pos.ch));
-}
-
-function offsetToPos(
-    view: EditorView,
-    offset: number,
-): { line: number; ch: number } {
-    const line = view.state.doc.lineAt(
-        Math.max(0, Math.min(view.state.doc.length, offset)),
-    );
-    return { line: line.number - 1, ch: Math.max(0, offset - line.from) };
-}
 
 /**
  * Build Obsidian-compatible editor + markdown-view API objects and write
