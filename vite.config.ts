@@ -1,12 +1,13 @@
 import { defineConfig } from "vite";
 import solidPlugin from "vite-plugin-solid";
 import UnoCSS from "unocss/vite";
+import path from "path";
 
 const host = process.env.TAURI_DEV_HOST;
 const isTauriBuild = Boolean(process.env.TAURI_ENV_PLATFORM);
 
 export default defineConfig(async () => ({
-  plugins: [UnoCSS(), solidPlugin()],
+  plugins: [UnoCSS(), solidPlugin({ generate: "dom", ssr: false })],
 
   cacheDir: ".vite-cache",
 
@@ -57,6 +58,7 @@ export default defineConfig(async () => ({
     alias: {
       "@": "/src",
     },
+    conditions: ["browser", "import", "default"],
   },
 
   test: {
@@ -64,6 +66,13 @@ export default defineConfig(async () => ({
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
+    },
+    resolve: {
+      conditions: ["browser"],
+    },
+    deps: {
+      registerNodeLoader: true,
+      inline: [/solid-js/, /@solidjs/, /lucide-solid/],
     },
   },
 }));
