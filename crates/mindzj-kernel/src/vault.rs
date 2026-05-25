@@ -14,6 +14,9 @@ const MAX_SNAPSHOTS_PER_FILE: usize = 50;
 /// The hidden config directory inside each vault.
 const VAULT_CONFIG_DIR: &str = ".mindzj";
 
+/// Maximum file size for `read_binary` — 50 MiB.
+const MAX_READ_BINARY_SIZE: u64 = 50 * 1024 * 1024;
+
 /// Manages all file I/O for a single vault.
 /// All filesystem operations MUST go through this module —
 /// direct `fs::*` calls from other modules are forbidden.
@@ -746,6 +749,16 @@ impl Vault {
             )));
         }
 
+        let meta = abs_path.metadata()?;
+        if meta.len() > MAX_READ_BINARY_SIZE {
+            return Err(KernelError::FileTooLarge(format!(
+                "{} ({} bytes exceeds {} byte limit)",
+                relative_path,
+                meta.len(),
+                MAX_READ_BINARY_SIZE
+            )));
+        }
+
         let data = fs::read(&abs_path)?;
         Ok(data)
     }
@@ -1302,4 +1315,57 @@ Another #final-tag.
         assert_eq!(children.len(), 1);
         assert_eq!(children[0].name, "note.md");
     }
+
+    #[test]
+    fn test_read_binary_rejects_oversized_file() {
+        let (tmp, vault) = setup();
+
+        // Create a sparse file exceeding the limit (no heap allocation)
+        let file_path = tmp.path().join("big.bin");
+        let f = std::fs::File::create(&file_path).unwrap();
+        f.set_len(MAX_READ_BINARY_SIZE + 1).unwrap();
+        drop(f);
+
+        let result = vault.read_binary("big.bin");
+        assert!(result.is_err(), "Should reject oversized file");
+        let err = result.unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("too large") || msg.contains("exceeds"),
+            "Error should mention size limit, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_read_binary_accepts_file_under_limit() {
+        let (_tmp, vault) = setup();
+
+        let data = b"hello, small binary";
+        vault.write_binary("small.bin", data).unwrap();
+
+        let result = vault.read_binary("small.bin").unwrap();
+        assert_eq!(result, data);
+    }
+
+    #[test]
+    fn test_read_binary_limit_is_checked_before_read() {
+        let (tmp, vault) = setup();
+
+        // Exactly at limit — should succeed (sparse file)
+        let at_limit_path = tmp.path().join("at_limit.bin");
+        let f = std::fs::File::create(&at_limit_path).unwrap();
+        f.set_len(MAX_READ_BINARY_SIZE).unwrap();
+        drop(f);
+        let result = vault.read_binary("at_limit.bin");
+        assert!(result.is_ok(), "File exactly at limit should succeed");
+
+        // One byte over — should fail (sparse file)
+        let over_limit_path = tmp.path().join("over_limit.bin");
+        let f = std::fs::File::create(&over_limit_path).unwrap();
+        f.set_len(MAX_READ_BINARY_SIZE + 1).unwrap();
+        drop(f);
+        let result = vault.read_binary("over_limit.bin");
+        assert!(result.is_err(), "File one byte over limit should fail");
+}
 }

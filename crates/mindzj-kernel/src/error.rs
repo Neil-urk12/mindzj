@@ -51,6 +51,9 @@ pub enum KernelError {
 
     #[error("Configuration error: {0}")]
     Config(String),
+
+    #[error("File too large: {0}")]
+    FileTooLarge(String),
 }
 
 /// Serializable error wrapper for Tauri command responses.
@@ -80,6 +83,7 @@ impl From<KernelError> for CommandError {
             KernelError::Plugin(_) => "PLUGIN_ERROR",
             KernelError::AiProvider(_) => "AI_PROVIDER_ERROR",
             KernelError::Config(_) => "CONFIG_ERROR",
+            KernelError::FileTooLarge(_) => "FILE_TOO_LARGE",
         };
         CommandError {
             code: code.to_string(),
