@@ -248,7 +248,7 @@ function createEditorStore() {
     if (oldH) {
       const renamed = findRenamedHeadings(oldH, newH);
       for (const [oldText, newText] of renamed) {
-        updateBacklinksOnHeadingRename(path, oldText, newText).catch(() => {});
+        updateBacklinksOnHeadingRename(path, oldText, newText).catch((e) => console.warn("Failed to update backlinks on heading rename:", e));
       }
     }
     _fileHeadings.set(path, newH);
@@ -259,7 +259,7 @@ function createEditorStore() {
     if (oldContent && anchors && anchors.length > 0) {
       const renamedAnchors = findRenamedAnchors(anchors, oldContent, content);
       for (const [oldA, newA] of renamedAnchors) {
-        updateBacklinksOnHeadingRename(path, oldA, newA).catch(() => {});
+        updateBacklinksOnHeadingRename(path, oldA, newA).catch((e) => console.warn("Failed to update backlinks on heading alias rename:", e));
       }
       // Refresh anchor list after updates
       if (renamedAnchors.length > 0) {
