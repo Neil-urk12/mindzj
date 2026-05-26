@@ -39,7 +39,7 @@ const aboutRow = {
     padding: "6px 0",
     "font-size": "var(--mz-font-size-sm)",
     color: "var(--mz-text-primary)",
-};
+} as const;
 
 // ---------------------------------------------------------------------------
 // AboutLinkButton

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@solidjs/testing-library";
+import { render, screen, cleanup, fireEvent } from "@solidjs/testing-library";
 import { PluginsPanel } from "../PluginsPanel";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -74,6 +74,83 @@ describe("PluginsPanel", () => {
         expect(screen.getByText("Test Plugin")).toBeTruthy();
         expect(screen.getByText("A test plugin")).toBeTruthy();
       });
+    });
+  });
+
+  describe("Search and filtering", () => {
+    it("filters plugins by name when typing in search", async () => {
+      const MOCK_PLUGINS = [
+        {
+          manifest: { id: "alpha", name: "Alpha Plugin", description: "First", author: "A", author_url: "", version: "1.0", min_app_version: "", is_desktop_only: false },
+          enabled: true, has_styles: false, dir_path: "/plugins/alpha",
+        },
+        {
+          manifest: { id: "beta", name: "Beta Plugin", description: "Second", author: "B", author_url: "", version: "1.0", min_app_version: "", is_desktop_only: false },
+          enabled: true, has_styles: false, dir_path: "/plugins/beta",
+        },
+      ];
+      vi.mocked(invoke).mockResolvedValue(MOCK_PLUGINS);
+
+      render(() => <PluginsPanel />);
+
+      await vi.waitFor(() => {
+        expect(screen.getByText("Alpha Plugin")).toBeTruthy();
+      });
+
+      const searchInput = document.querySelector("input[type='text']") as HTMLInputElement;
+      await fireEvent.input(searchInput, { target: { value: "alpha" } });
+
+      expect(screen.getByText("Alpha Plugin")).toBeTruthy();
+      expect(screen.queryByText("Beta Plugin")).toBeNull();
+    });
+  });
+
+  describe("Toggle plugin", () => {
+    it("calls invoke('toggle_plugin') and reloadPlugin when enabling", async () => {
+      const { pluginStore } = await import("../../../stores/plugins");
+      const MOCK_DISABLED = [{
+        manifest: { id: "test-plugin", name: "Test Plugin", description: "A test", author: "T", author_url: "", version: "1.0", min_app_version: "", is_desktop_only: false },
+        enabled: false, has_styles: false, dir_path: "/plugins/test-plugin",
+      }];
+      vi.mocked(invoke).mockResolvedValue(MOCK_DISABLED);
+
+      render(() => <PluginsPanel />);
+
+      await vi.waitFor(() => {
+        expect(screen.getByText("Test Plugin")).toBeTruthy();
+      });
+
+      // Toggle is a <button> with only a <span> child (the thumb) — no SVG icon
+      const toggle = document.querySelector("button > span:only-child")?.closest("button") as HTMLButtonElement | null;
+      expect(toggle, "toggle button not found").not.toBeNull();
+      toggle!.click();
+
+      await vi.waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("toggle_plugin", { pluginId: "test-plugin", enabled: true });
+        expect(pluginStore.reloadPlugin).toHaveBeenCalledWith("test-plugin");
+      });
+    });
+  });
+
+  describe("Delete plugin", () => {
+    it("shows confirm dialog and deletes plugin on confirmation", async () => {
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+      vi.mocked(invoke).mockResolvedValue([MOCK_PLUGIN]);
+
+      render(() => <PluginsPanel />);
+
+      await vi.waitFor(() => {
+        expect(screen.getByText("Test Plugin")).toBeTruthy();
+      });
+
+      const deleteBtn = document.querySelector("button[title*='delete'], button[aria-label*='delete']") as HTMLButtonElement;
+      expect(deleteBtn).not.toBeNull();
+      deleteBtn.click();
+      await vi.waitFor(() => {
+        expect(confirmSpy).toHaveBeenCalled();
+        expect(invoke).toHaveBeenCalledWith("delete_plugin", { pluginId: "test-plugin" });
+      });
+    }
     });
   });
 });

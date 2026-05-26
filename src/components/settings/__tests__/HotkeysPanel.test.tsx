@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@solidjs/testing-library";
 import { HotkeysPanel } from "../HotkeysPanel";
+import { settingsStore } from "../../../stores/settings";
 
 vi.mock("../../../i18n", () => ({
   t: (key: string) => key,
@@ -113,6 +114,87 @@ describe("HotkeysPanel", () => {
         "hotkey_overrides",
         {},
       );
+    });
+  });
+
+  describe("Key capture flow", () => {
+    beforeEach(() => {
+      vi.mocked(settingsStore.settings).mockReturnValue({
+        hotkey_overrides: {},
+      });
+    });
+    it("enters capture mode when hotkey button clicked", async () => {
+      render(() => <HotkeysPanel />);
+      const hotkeyButton = screen.getByText("Ctrl+S");
+      fireEvent.click(hotkeyButton);
+      await vi.waitFor(() => {
+        expect(screen.getByText("settings.pressShortcut")).toBeTruthy();
+      });
+    });
+
+    it("saves captured key combination on keydown", async () => {
+      const { settingsStore } = await import("../../../stores/settings");
+      const updateSettingSpy = vi.mocked(settingsStore.updateSetting);
+      updateSettingSpy.mockClear();
+
+      render(() => <HotkeysPanel />);
+      fireEvent.click(screen.getByText("Ctrl+S"));
+
+      await vi.waitFor(() => {
+        expect(screen.getByText("settings.pressShortcut")).toBeTruthy();
+      });
+
+      fireEvent.keyDown(document, { key: "k", ctrlKey: true, shiftKey: true });
+
+      await vi.waitFor(() => {
+        expect(updateSettingSpy).toHaveBeenCalledWith(
+          "hotkey_overrides",
+          expect.objectContaining({ save: "Ctrl+Shift+K" }),
+        );
+      });
+    });
+
+    it("exits capture mode on Escape", async () => {
+      render(() => <HotkeysPanel />);
+      fireEvent.click(screen.getByText("Ctrl+S"));
+
+      await vi.waitFor(() => {
+        expect(screen.getByText("settings.pressShortcut")).toBeTruthy();
+      });
+
+      fireEvent.keyDown(document, { key: "Escape" });
+
+      await vi.waitFor(() => {
+        expect(screen.queryByText("settings.pressShortcut")).toBeNull();
+      });
+      expect(screen.getByText("Ctrl+S")).toBeTruthy();
+    });
+
+    it("ignores modifier-only keypresses", async () => {
+      render(() => <HotkeysPanel />);
+      fireEvent.click(screen.getByText("Ctrl+S"));
+
+      await vi.waitFor(() => {
+        expect(screen.getByText("settings.pressShortcut")).toBeTruthy();
+      });
+
+      fireEvent.keyDown(document, { key: "Control", ctrlKey: true });
+
+      expect(screen.getByText("settings.pressShortcut")).toBeTruthy();
+    });
+  });
+
+  describe("Custom override styling", () => {
+    it("applies accent styling to overridden hotkeys", async () => {
+      const { settingsStore } = await import("../../../stores/settings");
+      vi.mocked(settingsStore.settings).mockReturnValue({
+        hotkey_overrides: { "new-note": "Alt+N" },
+      });
+
+      render(() => <HotkeysPanel />);
+
+      const hotkeyButton = screen.getByText("Alt+N");
+      expect(hotkeyButton.getAttribute("style")).toContain("var(--mz-accent)");
     });
   });
 });

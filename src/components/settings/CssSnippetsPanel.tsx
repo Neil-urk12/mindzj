@@ -34,7 +34,7 @@ const snippetBtnPrimary = {
     cursor: "pointer",
     "font-size": "var(--mz-font-size-sm)",
     "font-family": "var(--mz-font-sans)",
-};
+} as const;
 
 const snippetBtnSecondary = {
     padding: "6px 12px",
@@ -45,7 +45,7 @@ const snippetBtnSecondary = {
     cursor: "pointer",
     "font-size": "var(--mz-font-size-sm)",
     "font-family": "var(--mz-font-sans)",
-};
+} as const;
 
 const snippetBtnDanger = {
     padding: "6px 12px",
@@ -56,7 +56,7 @@ const snippetBtnDanger = {
     cursor: "pointer",
     "font-size": "var(--mz-font-size-sm)",
     "font-family": "var(--mz-font-sans)",
-};
+} as const;
 
 const snippetCardStyle = {
     display: "flex",
@@ -70,7 +70,7 @@ const snippetCardStyle = {
     "margin-bottom": "8px",
     background: "var(--mz-bg-primary)",
     cursor: "pointer",
-};
+} as const;
 
 const snippetCardSelectedStyle = {
     border: "1px solid var(--mz-accent)",

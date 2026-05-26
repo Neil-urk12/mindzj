@@ -15,41 +15,9 @@ import {
 } from "../../stores/plugins";
 import { SettingSection } from "./controls";
 import { type PluginManifestFE, type PluginInfoFE } from "./PluginsPanel";
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
-const titleStyle = {
-    "font-size": "1.3em",
-    "font-weight": "700",
-    color: "var(--mz-text-primary)",
-    "margin-bottom": "20px",
-};
+import { titleStyle, titleSelectStyle } from "./styles";
 
 
-const titleSelectStyle = {
-    width: "180px",
-    padding: "4px 8px",
-    border: "1px solid var(--mz-border)",
-    "border-radius": "var(--mz-radius-sm)",
-    background: "var(--mz-bg-primary)",
-    color: "var(--mz-text-primary)",
-    "font-size": "var(--mz-font-size-sm)",
-    "font-family": "var(--mz-font-sans)",
-    cursor: "pointer",
-} as const;
-
-const sectionTitleStyle = {
-    "font-size": "var(--mz-font-size-sm)",
-    "font-weight": "600",
-    color: "var(--mz-text-muted)",
-    "text-transform": "uppercase",
-    "letter-spacing": "0.5px",
-    "margin-bottom": "12px",
-    "padding-bottom": "6px",
-    "border-bottom": "1px solid var(--mz-border)",
-} as const;
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -348,5 +316,3 @@ export const PluginSettingsPanel: Component<{ pluginId: string }> = (props) => {
         </div>
     );
 };
-
-export { titleStyle, titleSelectStyle, sectionTitleStyle };
