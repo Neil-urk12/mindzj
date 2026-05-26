@@ -32,6 +32,7 @@ impl From<KernelError> for CommandError {
             KernelError::AiProvider(_) => "AI_PROVIDER_ERROR",
             KernelError::Config(_) => "CONFIG_ERROR",
             KernelError::FileTooLarge(_) => "FILE_TOO_LARGE",
+            KernelError::InvalidInput(_) => "INVALID_INPUT",
         };
 
         CommandError {
