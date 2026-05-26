@@ -9,6 +9,8 @@ import {
   updateBacklinksOnHeadingRename,
 } from "../utils/linkUpdater";
 import type { ViewMode } from "../types";
+import { clampZoom, clampAutoSaveInterval } from "../utils/clamp";
+import { AUTO_SAVE_MIN_MS, AUTO_SAVE_MAX_MS } from "../constants/timeouts";
 
 export type { ViewMode } from "../types";
 type EditableViewMode = Exclude<ViewMode, "reading">;
@@ -274,7 +276,7 @@ function createEditorStore() {
   function autoSaveDelayMs(): number {
     const value = Number(settingsStore.settings().auto_save_interval_ms);
     if (!Number.isFinite(value)) return 2000;
-    return Math.max(500, Math.min(30000, Math.round(value)));
+    return clampAutoSaveInterval(value);
   }
 
   // Schedule auto-save after edits using the configured debounce interval.
@@ -648,16 +650,16 @@ function createEditorStore() {
 
   // Zoom editor text (Ctrl + mousewheel).
   function zoomEditorText(delta: number) {
-    setEditorZoom((prev) => Math.max(50, Math.min(200, prev + delta)));
+    setEditorZoom((prev) => clampZoom(prev + delta));
   }
 
   // Zoom entire UI (Ctrl + =/-)
   function zoomUI(delta: number) {
-    setUiZoomSignal((prev) => Math.max(50, Math.min(200, prev + delta)));
+    setUiZoomSignal((prev) => clampZoom(prev + delta));
   }
 
   function setUiZoom(value: number) {
-    setUiZoomSignal(() => Math.max(50, Math.min(200, Math.round(value))));
+    setUiZoomSignal(() => clampZoom(value));
   }
 
   // Cleanup on unmount

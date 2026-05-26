@@ -399,9 +399,6 @@ export async function mountPluginView(
 
         activatePluginView(handle);
 
-        console.log(
-            `[Plugin View] Mounted view for ${filePath} (handle: ${handle}, type: ${viewType})`,
-        );
         return { view, handle };
     } catch (e) {
         console.error("[Plugin View] Failed to create view:", e);
@@ -628,12 +625,9 @@ function createPluginStore() {
                 { id, manifest: plugin.manifest, styleEl, instance },
             ];
             // Expose for Outline component to find plugins with outline creators
-            (window as any).__mindzj_loadedPlugins = next;
+            window.__mindzj_loadedPlugins = next;
             return next;
         });
-        console.log(
-            `[Plugin] Loaded: ${plugin.manifest.name} v${plugin.manifest.version}`,
-        );
     }
 
     async function executePluginCode(

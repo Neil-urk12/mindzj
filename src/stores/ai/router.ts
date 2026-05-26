@@ -1,12 +1,13 @@
 import type { AiProviderConfig, AiProviderType } from "../settings";
 import type { AdapterConfig, ProviderFamily } from "./types";
+import { ANTHROPIC_ENDPOINT, DEEPSEEK_ENDPOINT, GEMINI_ENDPOINT, LMSTUDIO_ENDPOINT, OLLAMA_ENDPOINT, OPENAI_ENDPOINT, XAI_ENDPOINT } from "../../constants/apiEndpoints";
 
 export const PROVIDER_DEFAULTS: Record<AiProviderType, AiProviderConfig> = {
   Ollama: {
     id: null,
     display_name: null,
     provider_type: "Ollama",
-    endpoint: "http://localhost:11434/v1",
+    endpoint: OLLAMA_ENDPOINT,
     api_key: null,
     has_api_key: false,
     model: "llama3.2",
@@ -15,7 +16,7 @@ export const PROVIDER_DEFAULTS: Record<AiProviderType, AiProviderConfig> = {
     id: null,
     display_name: null,
     provider_type: "LMStudio",
-    endpoint: "http://localhost:1234/v1",
+    endpoint: LMSTUDIO_ENDPOINT,
     api_key: null,
     has_api_key: false,
     model: "local-model",
@@ -33,7 +34,7 @@ export const PROVIDER_DEFAULTS: Record<AiProviderType, AiProviderConfig> = {
     id: null,
     display_name: "OpenAI",
     provider_type: "OpenAI",
-    endpoint: "https://api.openai.com/v1",
+    endpoint: OPENAI_ENDPOINT,
     api_key: null,
     has_api_key: false,
     model: "gpt-5.5",
@@ -42,7 +43,7 @@ export const PROVIDER_DEFAULTS: Record<AiProviderType, AiProviderConfig> = {
     id: null,
     display_name: "Claude",
     provider_type: "Claude",
-    endpoint: "https://api.anthropic.com/v1",
+    endpoint: ANTHROPIC_ENDPOINT,
     api_key: null,
     has_api_key: false,
     model: "claude-sonnet-4-6",
@@ -51,7 +52,7 @@ export const PROVIDER_DEFAULTS: Record<AiProviderType, AiProviderConfig> = {
     id: null,
     display_name: "Grok",
     provider_type: "Grok",
-    endpoint: "https://api.x.ai/v1",
+    endpoint: XAI_ENDPOINT,
     api_key: null,
     has_api_key: false,
     model: "grok-4.20",
@@ -60,7 +61,7 @@ export const PROVIDER_DEFAULTS: Record<AiProviderType, AiProviderConfig> = {
     id: null,
     display_name: "Gemini",
     provider_type: "Gemini",
-    endpoint: "https://generativelanguage.googleapis.com/v1beta",
+    endpoint: GEMINI_ENDPOINT,
     api_key: null,
     has_api_key: false,
     model: "gemini-3-flash-preview",
@@ -69,7 +70,7 @@ export const PROVIDER_DEFAULTS: Record<AiProviderType, AiProviderConfig> = {
     id: null,
     display_name: "DeepSeek",
     provider_type: "DeepSeek",
-    endpoint: "https://api.deepseek.com",
+    endpoint: DEEPSEEK_ENDPOINT,
     api_key: null,
     has_api_key: false,
     model: "deepseek-v4-pro",
@@ -132,13 +133,13 @@ export function defaultApiKeyEndpoint(config: AiProviderConfig): string {
     : null;
   if (providerDefault) return providerDefault;
   const family = inferProviderFamily(config);
-  if (family === "anthropic") return "https://api.anthropic.com/v1";
-  if (family === "gemini") return "https://generativelanguage.googleapis.com/v1beta";
+  if (family === "anthropic") return ANTHROPIC_ENDPOINT;
+  if (family === "gemini") return GEMINI_ENDPOINT;
   if (modelHint(config).includes("grok") || modelHint(config).includes("xai")) {
-    return "https://api.x.ai/v1";
+    return XAI_ENDPOINT;
   }
-  if (modelHint(config).includes("deepseek")) return "https://api.deepseek.com";
-  return "https://api.openai.com/v1";
+  if (modelHint(config).includes("deepseek")) return DEEPSEEK_ENDPOINT;
+  return OPENAI_ENDPOINT;
 }
 
 export function isDeepSeekConfig(config: AiProviderConfig): boolean {

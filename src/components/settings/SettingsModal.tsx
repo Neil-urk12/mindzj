@@ -153,7 +153,7 @@ export const SettingsModal: Component<SettingsModalProps> = (props) => {
             const detail = (e as CustomEvent).detail;
             if (detail?.pluginId) {
                 // Look up plugin name from loaded plugins
-                const plugins = (window as any).__mindzj_loadedPlugins || [];
+                const plugins = window.__mindzj_loadedPlugins || [];
                 const found = plugins.find(
                     (p: any) => p.id === detail.pluginId,
                 );

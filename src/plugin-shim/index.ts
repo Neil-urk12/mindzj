@@ -829,7 +829,6 @@ export function installObsidianDomExtensions() {
     if (!(window as any).__mindzj_icons) (window as any).__mindzj_icons = {};
     Object.assign((window as any).__mindzj_icons, icons);
 
-    console.log("[Plugin] Obsidian DOM extensions installed");
 }
 
 // ---------------------------------------------------------------------------
@@ -1748,7 +1747,6 @@ export function createObsidianShim(pluginId: string) {
                 icon: cmd.icon,
                 pluginId,
             });
-            console.log(`[Plugin:${pluginId}] Command: ${cmd.name}`);
             return cmd;
         }
 
@@ -1761,7 +1759,6 @@ export function createObsidianShim(pluginId: string) {
 
         addSettingTab(tab: any) {
             pluginSettingTabs.set(pluginId, tab);
-            console.log(`[Plugin:${pluginId}] Setting tab registered`);
         }
 
         addStatusBarItem() {
@@ -1781,16 +1778,12 @@ export function createObsidianShim(pluginId: string) {
             if (type.includes("outline")) {
                 (this as any)._outlineViewCreator = viewCreator;
             }
-            console.log(`[Plugin:${pluginId}] View registered: ${type}`);
         }
 
         registerExtensions(extensions: string[], viewType: string) {
             for (const ext of extensions) {
                 pluginExtensionMap.set(ext, viewType);
             }
-            console.log(
-                `[Plugin:${pluginId}] Extensions registered: ${extensions.join(",")} -> ${viewType}`,
-            );
         }
 
         registerEvent(eventRef: any) {

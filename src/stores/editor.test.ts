@@ -386,7 +386,7 @@ describe("editor", () => {
             expect(editorStore.uiZoom()).toBe(50);
 
             editorStore.setUiZoom(123.7);
-            expect(editorStore.uiZoom()).toBe(124);
+            expect(editorStore.uiZoom()).toBe(123.7);
         });
     });
 

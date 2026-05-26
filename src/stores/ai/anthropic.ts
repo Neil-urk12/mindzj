@@ -1,5 +1,6 @@
 import type { ChatCompletionAdapter, ChatMessage, ToolDefinition, AdapterConfig, AiTransport, NormalizedResponse } from "./types";
 import { parseJsonObject } from "./types";
+import { AI_MAX_TOKENS } from "../../constants/timeouts";
 
 function anthropicToolDefinitions(tools: ToolDefinition[]) {
   return tools.map((tool) => ({
@@ -98,7 +99,7 @@ const anthropicAdapter: ChatCompletionAdapter = {
     const converted = anthropicMessages(messages);
     const raw = await transport(config.endpoint, config.authHeaders, {
       model: config.model,
-      max_tokens: 4096,
+      max_tokens: AI_MAX_TOKENS,
       messages: converted.messages,
       ...(converted.system ? { system: converted.system } : {}),
       ...(tools.length ? { tools: anthropicToolDefinitions(tools) } : {}),

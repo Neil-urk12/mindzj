@@ -750,8 +750,8 @@ const App: Component = () => {
     // startScreenshot & handleScreenshotSave — moved to useScreenshot hook
 
     onMount(async () => {
-        (window as any).__mindzj_flush_workspace = flushWorkspaceNow;
-        (window as any).__mindzj_switch_open_tab = switchOpenTab;
+        window.__mindzj_flush_workspace = flushWorkspaceNow;
+        window.__mindzj_switch_open_tab = switchOpenTab;
         document.body.style.removeProperty("zoom");
         document.documentElement.style.removeProperty("font-size");
 
@@ -780,8 +780,8 @@ const App: Component = () => {
             ),
         );
         onCleanup(() => {
-            if ((window as any).__mindzj_switch_open_tab === switchOpenTab) {
-                (window as any).__mindzj_switch_open_tab = null;
+            if (window.__mindzj_switch_open_tab === switchOpenTab) {
+                window.__mindzj_switch_open_tab = null;
             }
         });
 
@@ -851,9 +851,9 @@ const App: Component = () => {
         );
         onCleanup(() => {
             if (
-                (window as any).__mindzj_flush_workspace === flushWorkspaceNow
+                window.__mindzj_flush_workspace === flushWorkspaceNow
             ) {
-                delete (window as any).__mindzj_flush_workspace;
+                delete window.__mindzj_flush_workspace;
             }
         });
 
@@ -1035,10 +1035,6 @@ const App: Component = () => {
                     if (event.state === "Pressed") switchOpenTab(direction);
                 });
                 const ok = await isRegistered(combo).catch(() => false);
-                // eslint-disable-next-line no-console
-                console.log(
-                    `[GlobalShortcut] register('${combo}') success=${ok}`,
-                );
             } catch (err) {
                 console.warn(
                     `[GlobalShortcut] register('${combo}') failed:`,
@@ -1063,8 +1059,6 @@ const App: Component = () => {
             "mindzj://tab-switch",
             (event) => {
                 const direction = event.payload === "prev" ? "prev" : "next";
-                // eslint-disable-next-line no-console
-                console.log(`[tab-switch] event from Rust hook: ${direction}`);
                 switchOpenTab(direction);
             },
         );

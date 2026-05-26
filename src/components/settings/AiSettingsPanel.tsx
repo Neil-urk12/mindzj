@@ -28,6 +28,7 @@ import { SettingInput, SettingSelect, SettingSection } from "./controls";
 import { confirmDialog } from "../common/ConfirmDialog";
 import { t } from "../../i18n";
 
+import { ANTHROPIC_ENDPOINT, DEEPSEEK_ENDPOINT, GEMINI_ENDPOINT, OPENAI_ENDPOINT, XAI_ENDPOINT } from "../../constants/apiEndpoints";
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
@@ -385,12 +386,12 @@ export const AiSettingsPanel: Component = () => {
             ? aiAddModelDraft().toLowerCase()
             : `${aiConfig().display_name ?? ""} ${aiConfig().model ?? ""}`.toLowerCase();
         if (model.includes("gemini"))
-            return "https://generativelanguage.googleapis.com/v1beta";
+            return GEMINI_ENDPOINT;
         if (model.includes("grok") || model.includes("xai"))
-            return "https://api.x.ai/v1";
-        if (model.includes("claude")) return "https://api.anthropic.com/v1";
-        if (model.includes("deepseek")) return "https://api.deepseek.com";
-        return "https://api.openai.com/v1";
+            return XAI_ENDPOINT;
+        if (model.includes("claude")) return ANTHROPIC_ENDPOINT;
+        if (model.includes("deepseek")) return DEEPSEEK_ENDPOINT;
+        return OPENAI_ENDPOINT;
     };
 
     // --- Handlers ---

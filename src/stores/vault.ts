@@ -1,5 +1,7 @@
 import { createSignal, createRoot } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
+import { FILE_TREE_MAX_DEPTH } from "../constants/timeouts";
+import { handleStoreError } from "../utils/errorHandler";
 import type { VaultInfo, VaultEntry, FileContent } from "../types";
 
 export type { VaultInfo, VaultEntry, FileContent } from "../types";
@@ -34,8 +36,8 @@ function createVaultStore() {
       const info = await invoke<VaultInfo>("open_vault", { path, name });
       setVaultInfo(info);
       await refreshFileTree();
-    } catch (e: any) {
-      setError(e.message || "Failed to open vault");
+    } catch (e) {
+      handleStoreError(e, "Failed to open vault", setError);
       throw e;
     } finally {
       setIsLoading(false);
@@ -46,11 +48,11 @@ function createVaultStore() {
   async function refreshFileTree(): Promise<void> {
     try {
       const tree = await invoke<VaultEntry[]>("get_file_tree", {
-        maxDepth: 10,
+        maxDepth: FILE_TREE_MAX_DEPTH,
       });
       setFileTree(tree);
-    } catch (e: any) {
-      setError(e.message || "Failed to load file tree");
+    } catch (e) {
+      handleStoreError(e, "Failed to load file tree", setError);
     }
   }
 
@@ -67,8 +69,8 @@ function createVaultStore() {
       upsertOpenFile(content);
 
       return content;
-    } catch (e: any) {
-      setError(e.message || "Failed to open file");
+    } catch (e) {
+      handleStoreError(e, "Failed to open file", setError);
       throw e;
     } finally {
       setIsLoading(false);
@@ -148,8 +150,8 @@ function createVaultStore() {
       }
 
       return result;
-    } catch (e: any) {
-      setError(e.message || "Failed to save file");
+    } catch (e) {
+      handleStoreError(e, "Failed to save file", setError);
       throw e;
     }
   }
@@ -179,8 +181,8 @@ function createVaultStore() {
       const result: FileContent = { ...raw, kind: "text" };
       await refreshFileTree();
       return result;
-    } catch (e: any) {
-      setError(e.message || "Failed to create file");
+    } catch (e) {
+      handleStoreError(e, "Failed to create file", setError);
       throw e;
     }
   }
@@ -209,8 +211,8 @@ function createVaultStore() {
       await invoke("delete_file", { relativePath });
       await removeOpenEntry(relativePath, false);
       await refreshFileTree();
-    } catch (e: any) {
-      setError(e.message || "Failed to delete file");
+    } catch (e) {
+      handleStoreError(e, "Failed to delete file", setError);
       throw e;
     }
   }
@@ -220,8 +222,8 @@ function createVaultStore() {
       await invoke("delete_dir", { relativePath, recursive: true });
       await removeOpenEntry(relativePath, true);
       await refreshFileTree();
-    } catch (e: any) {
-      setError(e.message || "Failed to delete directory");
+    } catch (e) {
+      handleStoreError(e, "Failed to delete directory", setError);
       throw e;
     }
   }
@@ -231,8 +233,8 @@ function createVaultStore() {
     try {
       await invoke("create_dir", { relativePath });
       await refreshFileTree();
-    } catch (e: any) {
-      setError(e.message || "Failed to create directory");
+    } catch (e) {
+      handleStoreError(e, "Failed to create directory", setError);
       throw e;
     }
   }

@@ -333,7 +333,7 @@ function findActivePaneEditorView(
     }
     // 3. Legacy fallback — only correct in the single-pane case,
     //    but harmless when 1) and 2) failed to resolve anything.
-    const api = (window as any).__mindzj_plugin_editor_api;
+    const api = window.__mindzj_plugin_editor_api;
     return (api?.cm as EditorView | undefined) ?? undefined;
 }
 
@@ -377,17 +377,6 @@ function handleTabSwitchKeydown(
     const direction = getTabSwitchDirectionFromEvent(e);
     if (!direction) return false;
 
-    if (localStorage.getItem("mindzj-debug-tab-switch") === "1") {
-        // eslint-disable-next-line no-console
-        console.debug("[tab-switch] Ctrl+Shift/Alt+Arrow caught", {
-            key: e.key,
-            code: e.code,
-            keyCode: e.keyCode,
-            ctrl: e.ctrlKey,
-            shift: e.shiftKey,
-            alt: e.altKey,
-        });
-    }
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
@@ -431,7 +420,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
 
     function handleGlobalKeydown(e: KeyboardEvent) {
         // If the settings hotkey capture is active, let the HotkeysPanel handle the event.
-        if ((window as any).__mindzj_hotkey_capturing) return;
+        if (window.__mindzj_hotkey_capturing) return;
 
         if (aiPanel.showAiHistory() && e.key === "Escape") {
             e.preventDefault();

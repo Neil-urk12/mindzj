@@ -13,6 +13,7 @@ import {
 import type { ToolResult, ToolExecutionContext } from "../types";
 import { parseJsonObject } from "../types";
 import { TOOL_DEFINITIONS } from "./definitions";
+import { SEARCH_RESULT_LIMIT } from "../../../constants/timeouts";
 import {
   flattenEntries,
   cleanPath,
@@ -254,7 +255,7 @@ export async function executeTool(name: string, args: any, context?: ToolExecuti
         const query = String(args.query ?? "");
         const results = await invoke("search_vault", {
           query,
-          limit: 20,
+          limit: SEARCH_RESULT_LIMIT,
           extensionFilter: null,
           pathFilter: null,
         });

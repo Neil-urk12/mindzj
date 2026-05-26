@@ -51,7 +51,7 @@ export default defineConfig(async () => ({
   build: {
     target: "esnext",
     minify: isTauriBuild ? false : "esbuild",
-    sourcemap: true,
+    sourcemap: "hidden",
   },
 
   resolve: {
