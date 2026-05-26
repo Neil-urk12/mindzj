@@ -11,6 +11,7 @@ import {
     type CommandEntry,
     getBuiltinCommands,
     installPluginHotkeys,
+    uninstallPluginHotkeys,
     pluginCommandRegistry,
     getCurrentEditorCompat,
     getCurrentMarkdownViewCompat,
@@ -535,9 +536,9 @@ function createPluginStore() {
     async function loadAllPlugins(): Promise<void> {
         // Install Obsidian DOM extensions before any plugin code runs
         installObsidianDomExtensions();
-        installPluginHotkeys();
         installWorkspaceBridges();
         await unloadAllPlugins();
+        installPluginHotkeys();
         setLoading(true);
         try {
             const plugins = await invoke<PluginInfo[]>("list_plugins");
@@ -752,6 +753,7 @@ function createPluginStore() {
             } catch {}
             activePluginViews.delete(handle);
         }
+        uninstallPluginHotkeys();
     }
 
     async function unloadPlugin(pluginId: string): Promise<void> {

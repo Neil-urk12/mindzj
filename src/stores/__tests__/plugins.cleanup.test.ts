@@ -27,6 +27,9 @@ vi.mock("../../plugin-shim", () => ({
         workspace: { activeLeaf: null },
     })),
 }));
+// NOTE: `../plugin-shim/commands` is intentionally NOT mocked. The real
+// installPluginHotkeys/uninstallPluginHotkeys run so we can verify the actual
+// addEventListener/removeEventListener contract via the spies below.
 
 // ── Tests ────────────────────────────────────────────────────────
 
@@ -144,5 +147,130 @@ describe("installWorkspaceBridges listener cleanup", () => {
             "resize",
             expect.any(Function),
         );
+    });
+});
+
+describe("installPluginHotkeys cleanup on unloadAllPlugins", () => {
+    let docAddSpy: ReturnType<typeof vi.spyOn>;
+    let docRemoveSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        vi.resetModules();
+
+        docAddSpy = vi.spyOn(document, "addEventListener");
+        docRemoveSpy = vi.spyOn(document, "removeEventListener");
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it("registers a keydown listener during loadAllPlugins", async () => {
+        const { pluginStore } = await import("../plugins");
+
+        mockInvoke.mockImplementation(async (cmd: string) => {
+            if (cmd === "list_plugins") return [];
+            return null;
+        });
+
+        await pluginStore.loadAllPlugins();
+
+        const keydownCall = docAddSpy.mock.calls.find(
+            ([type, , capture]) => type === "keydown" && capture === true,
+        );
+        expect(keydownCall).toBeDefined();
+    });
+
+    // Regression: loadAllPlugins previously called installPluginHotkeys BEFORE
+    // unloadAllPlugins, which wiped the listener immediately after install.
+    it("hotkey listener survives after loadAllPlugins completes", async () => {
+        const { pluginStore } = await import("../plugins");
+
+        mockInvoke.mockImplementation(async (cmd: string) => {
+            if (cmd === "list_plugins") return [];
+            return null;
+        });
+
+        await pluginStore.loadAllPlugins();
+
+        // Find the keydown handler that was installed
+        const keydownCall = docAddSpy.mock.calls.find(
+            ([type, , capture]) => type === "keydown" && capture === true,
+        );
+        expect(keydownCall).toBeDefined();
+        const registeredHandler = keydownCall![1];
+
+        // Verify it was NOT removed during loadAllPlugins
+        const removeCallsForHandler = docRemoveSpy.mock.calls.filter(
+            ([type, handler]) =>
+                type === "keydown" && handler === registeredHandler,
+        );
+        expect(removeCallsForHandler).toHaveLength(0);
+    });
+
+    it("removes the keydown listener when unloadAllPlugins is called", async () => {
+        const { pluginStore } = await import("../plugins");
+
+        mockInvoke.mockImplementation(async (cmd: string) => {
+            if (cmd === "list_plugins") return [];
+            return null;
+        });
+
+        await pluginStore.loadAllPlugins();
+
+        // Verify listener was installed
+        const keydownCall = docAddSpy.mock.calls.find(
+            ([type, , capture]) => type === "keydown" && capture === true,
+        );
+        expect(keydownCall).toBeDefined();
+        const registeredHandler = keydownCall![1];
+
+        await pluginStore.unloadAllPlugins();
+
+        // Verify listener was removed with the same handler
+        expect(docRemoveSpy).toHaveBeenCalledWith(
+            "keydown",
+            registeredHandler,
+            true,
+        );
+    });
+
+    it("re-registers the keydown listener after a full load→unload→load cycle", async () => {
+        const { pluginStore } = await import("../plugins");
+
+        mockInvoke.mockImplementation(async (cmd: string) => {
+            if (cmd === "list_plugins") return [];
+            return null;
+        });
+
+        // First cycle
+        await pluginStore.loadAllPlugins();
+        await pluginStore.unloadAllPlugins();
+
+        // Reset spies to isolate second cycle
+        docAddSpy.mockClear();
+        docRemoveSpy.mockClear();
+
+        // Second cycle
+        await pluginStore.loadAllPlugins();
+
+        const keydownCall = docAddSpy.mock.calls.find(
+            ([type, , capture]) => type === "keydown" && capture === true,
+        );
+        expect(keydownCall).toBeDefined();
+    });
+
+    it("does not throw when unloadAllPlugins is called twice", async () => {
+        const { pluginStore } = await import("../plugins");
+
+        mockInvoke.mockImplementation(async (cmd: string) => {
+            if (cmd === "list_plugins") return [];
+            return null;
+        });
+
+        await pluginStore.loadAllPlugins();
+        await expect(pluginStore.unloadAllPlugins()).resolves.toBeUndefined();
+        await expect(pluginStore.unloadAllPlugins()).resolves.toBeUndefined();
     });
 });
