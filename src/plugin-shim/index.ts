@@ -6,11 +6,6 @@ import { VAULT_CONFIG_DIR, IMAGES_DIR, PLUGINS_DIR } from "../constants/vaultPat
 import {
     type LoadedPlugin,
     getScopedPluginLocalStorageKey,
-    getCurrentEditorCompat,
-    getCurrentMarkdownViewCompat,
-    getCommandMap,
-    getAllCommands,
-    pluginCommandRegistry,
     pluginSettingTabs,
     pluginViewRegistry,
     pluginExtensionMap,
@@ -20,6 +15,13 @@ import {
     _normPath,
     leafForPluginView,
 } from "../stores/plugins";
+import {
+    getCurrentEditorCompat,
+    getCurrentMarkdownViewCompat,
+    getCommandMap,
+    getAllCommands,
+    pluginCommandRegistry,
+} from "./commands";
 import { type EditorView, EditorView as EditorViewClass } from "@codemirror/view";
 import { posToOffset, offsetToPos } from "./editorUtils";
 import { EditorSelection } from "@codemirror/state";
@@ -1708,7 +1710,7 @@ export function createObsidianShim(pluginId: string) {
         _ribbonIcons: any[] = [];
         _events: any[] = [];
         _intervals: number[] = [];
-        _children: any[] = [];
+        _wsHandlers: EventListener[] = [];
         _domListeners: Array<{
             el: any;
             type: string;
@@ -1719,6 +1721,16 @@ export function createObsidianShim(pluginId: string) {
         constructor(app?: any, manifest?: any) {
             if (app) this.app = app;
             if (manifest) this.manifest = manifest;
+            // Wrap workspace.on to track this plugin's handlers
+            if (this.app?.workspace) {
+                const origOn = this.app.workspace.on.bind(this.app.workspace);
+                const wsHandlers = this._wsHandlers;
+                this.app.workspace.on = function (event: string, cb: Function) {
+                    const ref = origOn(event, cb);
+                    if (ref?._handler) wsHandlers.push(ref._handler);
+                    return ref;
+                };
+            }
         }
 
         addCommand(cmd: any) {
@@ -1836,12 +1848,29 @@ export function createObsidianShim(pluginId: string) {
             // Clear intervals
             for (const id of this._intervals) clearInterval(id);
             // Remove registered DOM event listeners
-            for (const { el, type, callback, options } of this._domListeners) {
+            for (const entry of this._domListeners) {
                 try {
-                    el?.removeEventListener?.(type, callback, options);
+                    if (entry.el) {
+                        entry.el.removeEventListener?.(entry.type, entry.callback, entry.options);
+                    }
                 } catch {}
             }
             this._domListeners = [];
+            // Clean up workspace.on() listeners — only this plugin's handlers
+            const wsListeners = this.app?.workspace?._domListeners;
+            if (Array.isArray(wsListeners)) {
+                for (const handler of this._wsHandlers) {
+                    try {
+                        document.removeEventListener("mindzj:workspace-trigger", handler);
+                    } catch {}
+                }
+                for (let i = wsListeners.length - 1; i >= 0; i--) {
+                    if (this._wsHandlers.includes(wsListeners[i].handler)) {
+                        wsListeners.splice(i, 1);
+                    }
+                }
+            }
+            this._wsHandlers = [];
         }
 
         addChild(child: any) {

@@ -299,22 +299,30 @@ function scheduleSearch(value: string) {
 // panel stays fresh even while the user is looking at a different
 // sidebar tab (in which case the panel is unmounted but we still want
 // its results to be up-to-date the next time they switch back).
+function onVaultFileSaved() {
+  // Skip while a Replace All is running — the loop writes one file
+  // at a time and would otherwise trigger a re-search per file,
+  // which both wastes work and flickers the result list. The
+  // replaceAll caller runs a single authoritative search when the
+  // loop is done.
+  if (isReplacing()) return;
+  if (isSearching()) return;
+  const q = query();
+  if (!q.trim()) return;
+  // Don't flip the spinner on — the refresh is background work
+  // driven by an editor save, not a user-initiated search, and
+  // flashing the spinner every autosave would look like a bug.
+  void runSearch(q, false);
+}
+
+export function cleanupVaultFileSavedListener() {
+  if (typeof document !== "undefined") {
+    document.removeEventListener("mindzj:vault-file-saved", onVaultFileSaved);
+  }
+}
+
 if (typeof document !== "undefined") {
-  document.addEventListener("mindzj:vault-file-saved", () => {
-    // Skip while a Replace All is running — the loop writes one file
-    // at a time and would otherwise trigger a re-search per file,
-    // which both wastes work and flickers the result list. The
-    // replaceAll caller runs a single authoritative search when the
-    // loop is done.
-    if (isReplacing()) return;
-    if (isSearching()) return;
-    const q = query();
-    if (!q.trim()) return;
-    // Don't flip the spinner on — the refresh is background work
-    // driven by an editor save, not a user-initiated search, and
-    // flashing the spinner every autosave would look like a bug.
-    void runSearch(q, false);
-  });
+  document.addEventListener("mindzj:vault-file-saved", onVaultFileSaved);
 }
 
 // ---------------------------------------------------------------------------

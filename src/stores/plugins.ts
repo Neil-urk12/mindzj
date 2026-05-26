@@ -6,6 +6,18 @@ import {
     createObsidianShim,
     createAppObject,
 } from "../plugin-shim";
+import {
+    type PluginCommand,
+    type CommandEntry,
+    getBuiltinCommands,
+    installPluginHotkeys,
+    pluginCommandRegistry,
+    getCurrentEditorCompat,
+    getCurrentMarkdownViewCompat,
+    getAllCommands,
+    getCommandMap,
+    executeCommandById,
+} from "../plugin-shim/commands";
 
 function getScopedPluginLocalStorageKey(pluginId: string, key: string) {
     const vaultScope = encodeURIComponent(
@@ -51,150 +63,17 @@ export interface LoadedPlugin {
     instance: any;
 }
 
-interface PluginCommand {
-    id: string;
-    name: string;
-    callback?: () => void | Promise<void>;
-    editorCallback?: (editor: any, view: any) => void | Promise<void>;
-    hotkeys?: Array<{ modifiers?: string[]; key?: string }>;
-    icon?: string;
-    pluginId: string;
-}
-
-type CommandEntry = {
-    id: string;
-    name: string;
-    icon?: string;
-    hotkeys?: Array<{ modifiers?: string[]; key?: string }>;
-    callback?: () => void | Promise<void>;
-    editorCallback?: (editor: any, view: any) => void | Promise<void>;
-};
 
 // Module-level getter wired by createPluginStore, used by mountPluginView
 let _getLoadedPlugins: () => LoadedPlugin[] = () => [];
 
-const pluginCommandRegistry = new Map<string, PluginCommand>();
+// Re-export command-related items from commands.ts for backward compatibility
 export { pluginCommandRegistry };
-
-function getCurrentEditorCompat(): any | null {
-    return (window as any).__mindzj_plugin_editor_api ?? null;
-}
 export { getCurrentEditorCompat };
-
-function getCurrentMarkdownViewCompat(): any | null {
-    return (window as any).__mindzj_markdown_view ?? null;
-}
 export { getCurrentMarkdownViewCompat };
-
-// [id, name, command] — dispatched via mindzj:editor-command
-const EDITOR_COMMANDS: [string, string, string][] = [
-    ["editor:toggle-bold", "Bold", "bold"],
-    ["editor:toggle-italics", "Italic", "italic"],
-    ["editor:toggle-strikethrough", "Strikethrough", "strikethrough"],
-    ["editor:toggle-underline", "Underline", "underline"],
-    ["editor:toggle-highlight", "Highlight", "highlight"],
-    ["editor:toggle-code", "Inline code", "code"],
-    ["editor:toggle-blockquote", "Blockquote", "quote"],
-    ["editor:toggle-checklist-status", "Checklist status", "toggle-checklist-status"],
-    ["editor:toggle-bullet-list", "Bullet list", "bullet-list"],
-    ["editor:toggle-numbered-list", "Numbered list", "numbered-list"],
-    ["editor:toggle-comments", "Comment", "toggle-comment"],
-    ["editor:insert-link", "Insert link", "link"],
-    ["editor:insert-tag", "Insert tag", "tag"],
-    ["editor:insert-wikilink", "Insert wikilink", "wikilink"],
-    ["editor:insert-embed", "Insert embed", "embed"],
-    ["editor:insert-callout", "Insert callout", "callout"],
-    ["editor:insert-mathblock", "Insert math block", "mathblock"],
-    ["editor:insert-table", "Insert table", "table"],
-    ["editor:swap-line-up", "Swap line up", "move-line-up"],
-    ["editor:swap-line-down", "Swap line down", "move-line-down"],
-    ["editor:clear-formatting", "Clear formatting", "clear-formatting"],
-];
-
-// [id, name, level] — dispatched via mindzj:editor-command with heading level
-const HEADING_COMMANDS: [string, string, number][] = [
-    ["editor:set-heading-1", "Heading 1", 1],
-    ["editor:set-heading-2", "Heading 2", 2],
-    ["editor:set-heading-3", "Heading 3", 3],
-    ["editor:set-heading-4", "Heading 4", 4],
-    ["editor:set-heading-5", "Heading 5", 5],
-    ["editor:set-heading-6", "Heading 6", 6],
-];
-
-function getBuiltinCommands(): CommandEntry[] {
-    const commands: CommandEntry[] = [];
-
-    for (const [id, name, command] of EDITOR_COMMANDS) {
-        commands.push({
-            id,
-            name,
-            callback: () =>
-                void document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command },
-                    }),
-                ),
-        });
-    }
-
-    for (const [id, name, level] of HEADING_COMMANDS) {
-        commands.push({
-            id,
-            name,
-            callback: () =>
-                void document.dispatchEvent(
-                    new CustomEvent("mindzj:editor-command", {
-                        detail: { command: "heading", level },
-                    }),
-                ),
-        });
-    }
-
-    commands.push(
-        {
-            id: "editor:focus",
-            name: "Focus editor",
-            callback: () => getCurrentEditorCompat()?.focus?.(),
-        },
-        {
-            id: "app:toggle-left-sidebar",
-            name: "Toggle left sidebar",
-            callback: () =>
-                void document.dispatchEvent(
-                    new CustomEvent("mindzj:app-command", {
-                        detail: { command: "toggle-left-sidebar" },
-                    }),
-                ),
-        },
-        {
-            id: "app:toggle-right-sidebar",
-            name: "Toggle right sidebar",
-            callback: () =>
-                void document.dispatchEvent(
-                    new CustomEvent("mindzj:app-command", {
-                        detail: { command: "toggle-right-sidebar" },
-                    }),
-                ),
-        },
-    );
-
-    return commands;
-}
-
-function getAllCommands(): CommandEntry[] {
-    return [
-        ...getBuiltinCommands(),
-        ...Array.from(pluginCommandRegistry.values()).map((cmd) => ({
-            id: cmd.id,
-            name: cmd.name,
-            icon: cmd.icon,
-            hotkeys: cmd.hotkeys,
-            callback: cmd.callback,
-            editorCallback: cmd.editorCallback,
-        })),
-    ];
-}
 export { getAllCommands };
+export { getCommandMap };
+export { executeCommandById };
 
 export function listPluginCommands(): Array<{
     id: string;
@@ -212,98 +91,6 @@ export async function runPluginCommand(commandId: string): Promise<boolean> {
     return executeCommandById(commandId);
 }
 
-function getCommandMap(): Record<string, CommandEntry> {
-    return Object.fromEntries(getAllCommands().map((cmd) => [cmd.id, cmd]));
-}
-export { getCommandMap };
-
-async function executeCommandById(commandId: string): Promise<boolean> {
-    const command = getCommandMap()[commandId];
-    if (!command) return false;
-
-    const editor = getCurrentEditorCompat();
-    const view = getCurrentMarkdownViewCompat();
-
-    try {
-        if (command.editorCallback && editor) {
-            await command.editorCallback(editor, view);
-            return true;
-        }
-        if (command.callback) {
-            await command.callback();
-            return true;
-        }
-    } catch (e) {
-        console.error(`[Plugin Command] Failed to execute "${commandId}":`, e);
-    }
-    return false;
-}
-
-function normalizeHotkeyKey(key: string | undefined): string {
-    if (!key) return "";
-    const value = key.toLowerCase();
-    if (value === "space") return " ";
-    return value;
-}
-
-function matchesPluginHotkey(
-    event: KeyboardEvent,
-    hotkey: { modifiers?: string[]; key?: string } | undefined,
-): boolean {
-    if (!hotkey?.key) return false;
-    const modifiers = new Set(
-        (hotkey.modifiers ?? []).map((m) => m.toLowerCase()),
-    );
-    const expectsMod = modifiers.has("mod");
-    const expectsCtrl = modifiers.has("ctrl");
-    const expectsMeta = modifiers.has("meta");
-    const expectsShift = modifiers.has("shift");
-    const expectsAlt = modifiers.has("alt");
-
-    const wantCtrl =
-        expectsCtrl ||
-        (expectsMod &&
-            !("ontouchstart" in window) &&
-            navigator.platform.toLowerCase().includes("win"));
-    const wantMeta =
-        expectsMeta ||
-        (expectsMod && navigator.platform.toLowerCase().includes("mac"));
-
-    if (!!event.ctrlKey !== wantCtrl) return false;
-    if (!!event.metaKey !== wantMeta) return false;
-    if (!!event.shiftKey !== expectsShift) return false;
-    if (!!event.altKey !== expectsAlt) return false;
-
-    return normalizeHotkeyKey(event.key) === normalizeHotkeyKey(hotkey.key);
-}
-
-let _pluginHotkeysInstalled = false;
-function installPluginHotkeys() {
-    if (_pluginHotkeysInstalled) return;
-    _pluginHotkeysInstalled = true;
-
-    document.addEventListener(
-        "keydown",
-        (event) => {
-            const commands = Array.from(pluginCommandRegistry.values());
-            for (const command of commands) {
-                if (!command.hotkeys?.length) continue;
-                if (
-                    !command.hotkeys.some((hotkey) =>
-                        matchesPluginHotkey(event, hotkey),
-                    )
-                ) {
-                    continue;
-                }
-                event.preventDefault();
-                event.stopPropagation();
-                void executeCommandById(command.id);
-                break;
-            }
-        },
-        true,
-    );
-}
 
 // ---------------------------------------------------------------------------
 // Global Plugin View Registry
@@ -685,11 +472,13 @@ export function getActivePluginView(filePath: string): any | null {
 // ---------------------------------------------------------------------------
 
 let _workspaceBridgesInstalled = false;
+let _workspaceTriggerHandler: ((event: Event) => void) | null = null;
+let _windowResizeHandler: (() => void) | null = null;
 function installWorkspaceBridges() {
     if (_workspaceBridgesInstalled) return;
     _workspaceBridgesInstalled = true;
 
-    document.addEventListener("mindzj:workspace-trigger", (event) => {
+    _workspaceTriggerHandler = (event) => {
         const detail = (event as CustomEvent).detail;
         if (detail?.event !== "active-leaf-change" || detail.leaf) return;
 
@@ -707,16 +496,31 @@ function installWorkspaceBridges() {
                 }
             }
         }
-    });
+    };
+    document.addEventListener("mindzj:workspace-trigger", _workspaceTriggerHandler);
 
     // Bridge window resize to workspace "resize" event
-    window.addEventListener("resize", () => {
+    _windowResizeHandler = () => {
         document.dispatchEvent(
             new CustomEvent("mindzj:workspace-trigger", {
                 detail: { event: "resize" },
             }),
         );
-    });
+    };
+    window.addEventListener("resize", _windowResizeHandler);
+}
+
+export function uninstallWorkspaceBridges() {
+    if (!_workspaceBridgesInstalled) return;
+    if (_workspaceTriggerHandler) {
+        document.removeEventListener("mindzj:workspace-trigger", _workspaceTriggerHandler);
+        _workspaceTriggerHandler = null;
+    }
+    if (_windowResizeHandler) {
+        window.removeEventListener("resize", _windowResizeHandler);
+        _windowResizeHandler = null;
+    }
+    _workspaceBridgesInstalled = false;
 }
 
 // ---------------------------------------------------------------------------
