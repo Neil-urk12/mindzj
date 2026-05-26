@@ -33,6 +33,19 @@ const MOCK_PLUGIN = {
   dir_path: "/plugins/test-plugin",
 };
 
+const MOCK_CORE_PLUGIN = {
+  manifest: {
+    id: "core-plugin",
+    name: "Core Plugin",
+    description: "A core plugin",
+  },
+  enabled: true,
+  has_settings: false,
+  has_styles: false,
+  dir_path: "/plugins/core-plugin",
+  is_core: true,
+};
+
 describe("PluginsPanel", () => {
   beforeEach(() => {
     cleanup();
@@ -127,6 +140,50 @@ describe("PluginsPanel", () => {
         expect(pluginStore.reloadPlugin).toHaveBeenCalledWith("test-plugin");
       });
     });
+
+    it("marks core plugin toggle as aria-disabled", async () => {
+      vi.mocked(invoke).mockResolvedValue([MOCK_CORE_PLUGIN]);
+
+      render(() => <PluginsPanel />);
+
+      await vi.waitFor(() => {
+        expect(screen.getByText("Core Plugin")).toBeTruthy();
+      });
+
+      const toggle = screen.getByTestId("plugin-toggle-core-plugin") as HTMLButtonElement;
+      expect(toggle.getAttribute("aria-disabled")).toBe("true");
+    });
+
+    it("does not set aria-disabled on non-core plugin toggle", async () => {
+      vi.mocked(invoke).mockResolvedValue([MOCK_PLUGIN]);
+
+      render(() => <PluginsPanel />);
+
+      await vi.waitFor(() => {
+        expect(screen.getByText("Test Plugin")).toBeTruthy();
+      });
+
+      const toggle = screen.getByTestId("plugin-toggle-test-plugin") as HTMLButtonElement;
+      expect(toggle.hasAttribute("aria-disabled")).toBe(false);
+    });
+
+    it("does not call toggle_plugin when clicking core plugin toggle", async () => {
+      const { pluginStore } = await import("../../../stores/plugins");
+      vi.mocked(invoke).mockResolvedValue([MOCK_CORE_PLUGIN]);
+
+      render(() => <PluginsPanel />);
+
+      await vi.waitFor(() => {
+        expect(screen.getByText("Core Plugin")).toBeTruthy();
+      });
+
+      const toggle = screen.getByTestId("plugin-toggle-core-plugin") as HTMLButtonElement;
+      toggle.click();
+
+      await new Promise(r => setTimeout(r, 50));
+      expect(invoke).not.toHaveBeenCalledWith("toggle_plugin", expect.anything());
+      expect(pluginStore.reloadPlugin).not.toHaveBeenCalled();
+    });
   });
 
   describe("Delete plugin", () => {
@@ -146,7 +203,6 @@ describe("PluginsPanel", () => {
         expect(confirmSpy).toHaveBeenCalled();
         expect(invoke).toHaveBeenCalledWith("delete_plugin", { pluginId: "test-plugin" });
       });
-    }
     });
   });
 });

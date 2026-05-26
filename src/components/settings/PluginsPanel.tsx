@@ -560,6 +560,7 @@ export const PluginsPanel: Component<{
                                             role="switch"
                                             aria-checked={plugin.enabled}
                                             data-testid={`plugin-toggle-${plugin.manifest.id}`}
+                                            aria-disabled={plugin.is_core ? "true" : undefined}
                                             onClick={() => {
                                                 if (!plugin.is_core)
                                                     togglePlugin(
