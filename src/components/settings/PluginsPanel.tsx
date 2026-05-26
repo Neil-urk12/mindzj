@@ -592,7 +592,7 @@ export const PluginsPanel: Component<{
                                                     ? t(
                                                           "settings.corePluginCannotDisable",
                                                       )
-                                                    : ""
+                                                    : undefined
                                             }>
                                             <span
                                                 style={{

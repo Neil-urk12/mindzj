@@ -141,6 +141,25 @@ describe("PluginsPanel", () => {
       });
     });
 
+    it("calls toggle_plugin with enabled=false when disabling", async () => {
+      const { pluginStore } = await import("../../../stores/plugins");
+      vi.mocked(invoke).mockResolvedValue([MOCK_PLUGIN]);
+
+      render(() => <PluginsPanel />);
+
+      await vi.waitFor(() => {
+        expect(screen.getByText("Test Plugin")).toBeTruthy();
+      });
+
+      const toggle = screen.getByTestId("plugin-toggle-test-plugin") as HTMLButtonElement;
+      toggle.click();
+
+      await vi.waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("toggle_plugin", { pluginId: "test-plugin", enabled: false });
+        expect(pluginStore.unloadPlugin).toHaveBeenCalledWith("test-plugin");
+      });
+    });
+
     it("marks core plugin toggle as aria-disabled", async () => {
       vi.mocked(invoke).mockResolvedValue([MOCK_CORE_PLUGIN]);
 
@@ -180,8 +199,7 @@ describe("PluginsPanel", () => {
       const toggle = screen.getByTestId("plugin-toggle-core-plugin") as HTMLButtonElement;
       toggle.click();
 
-      await new Promise(r => setTimeout(r, 50));
-      expect(invoke).not.toHaveBeenCalledWith("toggle_plugin", expect.anything());
+      expect(invoke).not.toHaveBeenCalledWith("toggle_plugin", expect.objectContaining({ pluginId: expect.any(String) }));
       expect(pluginStore.reloadPlugin).not.toHaveBeenCalled();
     });
   });
@@ -203,6 +221,18 @@ describe("PluginsPanel", () => {
         expect(confirmSpy).toHaveBeenCalled();
         expect(invoke).toHaveBeenCalledWith("delete_plugin", { pluginId: "test-plugin" });
       });
+    });
+
+    it("hides delete button for core plugin", async () => {
+      vi.mocked(invoke).mockResolvedValue([MOCK_CORE_PLUGIN]);
+
+      render(() => <PluginsPanel />);
+
+      await vi.waitFor(() => {
+        expect(screen.getByText("Core Plugin")).toBeTruthy();
+      });
+
+      expect(screen.queryByTitle("settings.deletePlugin")).toBeNull();
     });
   });
 });
