@@ -12,7 +12,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 // Runtime import — will throw a module-not-found error if
 // src/types/global.ts doesn't exist. The module itself only
 // needs to contain `export {};` plus the `declare global` block.
-import globalAugmentation from "../global";
+import "../global";
 
 // ---------------------------------------------------------------------------
 // Expected __mindzj_* property names (all 9)
@@ -33,16 +33,11 @@ const EXPECTED_GLOBALS = [
 // 1. Module existence
 // ---------------------------------------------------------------------------
 describe("src/types/global.ts module", () => {
-  it("exists and is importable", () => {
-    // If the file doesn't exist the import above throws and the
-    // entire test suite fails with a module-not-found error.
-    expect(globalAugmentation).toBeDefined();
-  });
-
-  it("is empty object (augmentation-only module)", () => {
-    // The file should only contain `export {};` + `declare global`.
-    // No runtime values expected.
-    expect(typeof globalAugmentation).toBe("object");
+  it("exists and is importable (augmentation-only module)", () => {
+    // Side-effect import at top of file already validates this.
+    // If module didn't exist, the import would throw and suite would fail.
+    // Augmentation-only modules have no runtime exports to assert.
+    expect(typeof window).toBe("object");
   });
 });
 

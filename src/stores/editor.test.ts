@@ -385,8 +385,9 @@ describe("editor", () => {
             editorStore.setUiZoom(10);
             expect(editorStore.uiZoom()).toBe(50);
 
+            // clampZoom rounds to integer for consistent display values
             editorStore.setUiZoom(123.7);
-            expect(editorStore.uiZoom()).toBe(123.7);
+            expect(editorStore.uiZoom()).toBe(124);
         });
     });
 

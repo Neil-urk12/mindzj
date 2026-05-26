@@ -6,7 +6,7 @@ function clampValue(value: number, min: number, max: number): number {
 }
 
 export function clampZoom(value: number): number {
-  return Math.max(50, Math.min(200, Number.isFinite(value) ? value : value > 0 ? 200 : 50));
+  return clampValue(value, 50, 200);
 }
 
 export function clampAutoSaveInterval(value: number): number {

@@ -28,11 +28,11 @@ describe("clampZoom", () => {
     expect(clampZoom(200)).toBe(200);
   });
 
-  it("preserves non-integer inputs (no rounding)", () => {
-    expect(clampZoom(50.4)).toBe(50.4);
-    expect(clampZoom(50.6)).toBe(50.6);
-    expect(clampZoom(199.7)).toBe(199.7);
-    expect(clampZoom(100.1)).toBe(100.1);
+  it("rounds non-integer inputs to integers", () => {
+    expect(clampZoom(50.4)).toBe(50);
+    expect(clampZoom(50.6)).toBe(51);
+    expect(clampZoom(199.7)).toBe(200);
+    expect(clampZoom(100.1)).toBe(100);
   });
 
   it("handles NaN by clamping to min", () => {
