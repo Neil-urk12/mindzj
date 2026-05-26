@@ -97,7 +97,7 @@ describe("PluginsPanel", () => {
         expect(screen.getByText("Alpha Plugin")).toBeTruthy();
       });
 
-      const searchInput = document.querySelector("input[type='text']") as HTMLInputElement;
+      const searchInput = screen.getByRole("textbox") as HTMLInputElement;
       await fireEvent.input(searchInput, { target: { value: "alpha" } });
 
       expect(screen.getByText("Alpha Plugin")).toBeTruthy();
@@ -119,11 +119,8 @@ describe("PluginsPanel", () => {
       await vi.waitFor(() => {
         expect(screen.getByText("Test Plugin")).toBeTruthy();
       });
-
-      // Toggle is a <button> with only a <span> child (the thumb) — no SVG icon
-      const toggle = document.querySelector("button > span:only-child")?.closest("button") as HTMLButtonElement | null;
-      expect(toggle, "toggle button not found").not.toBeNull();
-      toggle!.click();
+      const toggle = screen.getByTestId("plugin-toggle-test-plugin") as HTMLButtonElement;
+      toggle.click();
 
       await vi.waitFor(() => {
         expect(invoke).toHaveBeenCalledWith("toggle_plugin", { pluginId: "test-plugin", enabled: true });
@@ -143,8 +140,7 @@ describe("PluginsPanel", () => {
         expect(screen.getByText("Test Plugin")).toBeTruthy();
       });
 
-      const deleteBtn = document.querySelector("button[title*='delete'], button[aria-label*='delete']") as HTMLButtonElement;
-      expect(deleteBtn).not.toBeNull();
+      const deleteBtn = screen.getByTitle("settings.deletePlugin") as HTMLButtonElement;
       deleteBtn.click();
       await vi.waitFor(() => {
         expect(confirmSpy).toHaveBeenCalled();

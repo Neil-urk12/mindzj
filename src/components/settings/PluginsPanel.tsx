@@ -557,6 +557,9 @@ export const PluginsPanel: Component<{
 
                                         {/* Toggle switch — core plugins are always enabled */}
                                         <button
+                                            role="switch"
+                                            aria-checked={plugin.enabled}
+                                            data-testid={`plugin-toggle-${plugin.manifest.id}`}
                                             onClick={() => {
                                                 if (!plugin.is_core)
                                                     togglePlugin(
