@@ -15,6 +15,7 @@
  */
 
 import {
+    EditorView,
     ViewPlugin,
     ViewUpdate,
     Decoration,
