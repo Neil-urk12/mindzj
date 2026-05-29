@@ -38,6 +38,8 @@ pub struct Vault {
     /// Absolute, canonicalized vault root path
     root: PathBuf,
     /// Write lock to ensure atomic file operations
+    // Lock ordering: write_lock > config_write_lock > PLUGINS_WRITE_LOCK
+    // Never hold two of these simultaneously.
     write_lock: Mutex<()>
 }
 
@@ -51,6 +53,61 @@ impl Drop for TmpGuard<'_> {
     }
 }
 
+/// Atomically write to a file using temp-file + rename strategy.
+/// Ensures parent directories exist. Cleans up temp file on any error.
+pub(crate) fn atomic_write_file(
+    abs_path: &Path,
+    writer: impl FnOnce(&mut fs::File) -> std::io::Result<()>,
+) -> KernelResult<()> {
+    // Validate the filename
+    if let Some(name) = abs_path.file_name() {
+        Vault::validate_file_name(&name.to_string_lossy())?;
+    }
+
+    // Validate parent directory
+    let parent = abs_path.parent().ok_or_else(|| {
+        KernelError::Io(std::io::Error::other(
+            "atomic_write_file requires a path with a parent directory",
+        ))
+    })?;
+    if parent.as_os_str().is_empty() {
+        return Err(KernelError::Io(std::io::Error::other(
+            "atomic_write_file requires a path with a parent directory, not a bare filename",
+        )));
+    }
+
+    // Ensure parent directory exists
+    if !parent.exists() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Write to a temporary file first, then rename atomically
+    let tmp_name = format!(
+        ".~{}.tmp",
+        abs_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+    );
+    let tmp_path = parent.join(&tmp_name);
+
+    // Guard ensures temp file cleanup on any error path
+    let guard = TmpGuard(&tmp_path);
+
+    let mut tmp_file = fs::File::create(&tmp_path)?;
+    writer(&mut tmp_file)?;
+
+    // fsync to ensure data is on disk
+    tmp_file.sync_all()?;
+
+    // Atomic rename
+    Vault::replace_with_temp(&tmp_path, abs_path)?;
+
+    // Disarm guard — rename succeeded, temp file no longer exists
+    let _ = ManuallyDrop::new(guard);
+
+    Ok(())
+}
 impl Vault {
     fn replace_with_temp(tmp_path: &Path, target_path: &Path) -> KernelResult<()> {
         match fs::rename(tmp_path, target_path) {
@@ -671,55 +728,13 @@ impl Vault {
         abs_path: &Path,
         writer: impl FnOnce(&mut fs::File) -> std::io::Result<()>,
     ) -> KernelResult<()> {
-        // Validate file name
-        if let Some(name) = abs_path.file_name() {
-            Self::validate_file_name(&name.to_string_lossy())?;
-        }
-
-        // Ensure parent directory exists
-        if let Some(parent) = abs_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)?;
-            }
-        }
-
         // Acquire write lock for atomicity
         let _lock = self
             .write_lock
             .lock()
             .map_err(|_| KernelError::Io(std::io::Error::other("Write lock poisoned")))?;
 
-        // Write to temporary file
-        let tmp_name = format!(
-            ".~{}.tmp",
-            abs_path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-        );
-        let tmp_path = abs_path
-            .parent()
-            .unwrap_or(&self.root)
-            .join(&tmp_name);
-
-        // Guard ensures temp file cleanup on any error path
-        let guard = TmpGuard(&tmp_path);
-
-        let mut tmp_file = fs::File::create(&tmp_path)?;
-        writer(&mut tmp_file)?;
-
-        // fsync to ensure data is on disk
-        tmp_file.sync_all()?;
-
-        // Atomic rename. On Windows, renaming over an existing
-        // destination can fail with "Access is denied"; remove-and-rename
-        // keeps existing-note updates working.
-        Self::replace_with_temp(&tmp_path, abs_path)?;
-
-        // Disarm guard — rename succeeded, temp file no longer exists
-        let _ = ManuallyDrop::new(guard);
-
-        Ok(())
+        atomic_write_file(abs_path, writer)
     }
 
     /// Write content to a file using atomic write strategy.
@@ -958,7 +973,7 @@ impl Vault {
         let timestamp = Utc::now().format("%Y%m%d_%H%M%S%.9f");
 
         // Encode the file path into a safe snapshot name
-        let safe_name = relative_path.replace('/', "__");
+        let safe_name = relative_path.replace('/', "_-");
         let snapshot_name = format!("{}_{}", safe_name, timestamp);
 
         let snapshots_dir = self
@@ -967,10 +982,20 @@ impl Vault {
             .join("snapshots");
         let snapshot_path = snapshots_dir.join(&snapshot_name);
 
-        fs::write(&snapshot_path, &content)?;
+        atomic_write_file(&snapshot_path, |file| file.write_all(&content))?;
 
         // Prune old snapshots if over the limit
-        self.prune_snapshots(&safe_name, &snapshots_dir)?;
+        let legacy_prefix = if relative_path.contains('/') {
+            let legacy = relative_path.replace('/', "__");
+            if self.root.join(&legacy).exists() {
+                None
+            } else {
+                Some(legacy)
+            }
+        } else {
+            None
+        };
+        self.prune_snapshots(&safe_name, &snapshots_dir, legacy_prefix.as_deref())?;
 
         Ok(())
     }
@@ -980,14 +1005,24 @@ impl Vault {
         &self,
         safe_name_prefix: &str,
         snapshots_dir: &Path,
+        legacy_prefix: Option<&str>,
     ) -> KernelResult<()> {
         let mut matching: Vec<PathBuf> = fs::read_dir(snapshots_dir)?
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .filter(|p| {
-                p.file_name()
-                    .map(|n| n.to_string_lossy().starts_with(&format!("{}_", safe_name_prefix)))
-                    .unwrap_or(false)
+                let name = p.file_name();
+                let prefix_new = format!("{}_", safe_name_prefix);
+                if name.map(|n| n.to_string_lossy().starts_with(&prefix_new)).unwrap_or(false) {
+                    return true;
+                }
+                if let Some(legacy) = legacy_prefix {
+                    let prefix_legacy = format!("{}_", legacy);
+                    if name.map(|n| n.to_string_lossy().starts_with(&prefix_legacy)).unwrap_or(false) {
+                        return true;
+                    }
+                }
+                false
             })
             .collect();
 
@@ -1010,7 +1045,20 @@ impl Vault {
         &self,
         relative_path: &str,
     ) -> KernelResult<Vec<String>> {
-        let safe_name = relative_path.replace('/', "__");
+        let safe_name = relative_path.replace('/', "_-");
+        // Legacy __ encoding fallback: only if path contains / AND
+        // no file exists at the legacy-encoded name (to avoid collision
+        // with a literal file like a__b.md).
+        let safe_name_legacy = if relative_path.contains('/') {
+            let legacy = relative_path.replace('/', "__");
+            if self.root.join(&legacy).exists() {
+                None // legacy name is a real file, don't match its snapshots
+            } else {
+                Some(legacy)
+            }
+        } else {
+            None
+        };
         let snapshots_dir = self
             .root
             .join(VAULT_CONFIG_DIR)
@@ -1024,8 +1072,16 @@ impl Vault {
             .filter_map(|e| e.ok())
             .filter_map(|e| {
                 let name = e.file_name().to_string_lossy().to_string();
-                if name.starts_with(&format!("{}_", safe_name)) {
+                let prefix_new = format!("{}_", safe_name);
+                if name.starts_with(&prefix_new) {
                     Some(name)
+                } else if let Some(ref legacy) = safe_name_legacy {
+                    let prefix_legacy = format!("{}_", legacy);
+                    if name.starts_with(&prefix_legacy) {
+                        Some(name)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
@@ -1614,5 +1670,120 @@ Another #final-tag.
         assert!(meta.char_count > 0);
         assert!(meta.tags.contains(&"tag1".to_string()));
         assert!(meta.tags.contains(&"tag2".to_string()));
+    }
+
+    #[test]
+    fn snapshot_no_encoding_collision() {
+        let (_tmp, vault) = setup();
+
+        // Write to paths that would collide with __ encoding
+        vault.write_file("a/b.md", "content of a/b").unwrap();
+        vault.write_file("a__b.md", "content of a__b").unwrap();
+
+        // Overwrite to create snapshots
+        vault.write_file("a/b.md", "updated a/b").unwrap();
+        vault.write_file("a__b.md", "updated a__b").unwrap();
+
+        // Snapshots for "a/b" should NOT include "a__b" snapshots
+        let snapshots_ab = vault.list_snapshots("a/b.md").unwrap();
+        let snapshots_aususb = vault.list_snapshots("a__b.md").unwrap();
+
+        // They should be separate lists
+        for snap in &snapshots_ab {
+            assert!(
+                !snap.contains("a__b"),
+                "a/b snapshot '{}' should not match a__b",
+                snap
+            );
+        }
+        for snap in &snapshots_aususb {
+            // a__b snapshots should use verbatim name (no slashes)
+            assert!(
+                snap.starts_with("a__b.md_"),
+                "a__b snapshot '{}' should use verbatim name",
+                snap
+            );
+        }
+
+        assert_eq!(snapshots_ab.len(), 1, "Should have 1 snapshot for a/b");
+        assert_eq!(snapshots_aususb.len(), 1, "Should have 1 snapshot for a__b");
+    }
+
+    #[test]
+    fn atomic_write_file_standalone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("test.txt");
+
+        atomic_write_file(&path, |file| file.write_all(b"hello world")).unwrap();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "hello world");
+    }
+
+    #[test]
+    fn atomic_write_file_cleanup_on_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("test.txt");
+
+        let result = atomic_write_file(&path, |_file| {
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "simulated"))
+        });
+
+        assert!(result.is_err());
+        assert!(!path.exists());
+        // No .tmp files
+        let entries: Vec<_> = fs::read_dir(tmp.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn atomic_write_file_creates_parent_dirs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("deep/nested/dir/file.txt");
+
+        atomic_write_file(&path, |file| file.write_all(b"nested")).unwrap();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "nested");
+    }
+
+    #[test]
+    fn atomic_write_file_rejects_bare_filename() {
+        // A bare filename with no parent directory should error,
+        // not silently write to CWD
+        let result = atomic_write_file(Path::new("bare_test_file.txt"), |file| {
+            use std::io::Write;
+            file.write_all(b"should not exist")
+        });
+        assert!(result.is_err(), "Bare filename should return an error");
+
+        // Ensure no file was created in CWD
+        let _ = std::fs::remove_file("bare_test_file.txt");
+    }
+
+    #[test]
+    fn snapshot_list_finds_legacy_double_underscore_encoded() {
+        let (_tmp, vault) = setup();
+
+        // Write a file to ensure snapshots dir exists
+        vault.write_file("a/b.md", "v1").unwrap();
+
+        // Manually create a legacy snapshot using __ encoding (old format)
+        let snapshots_dir = vault
+            .root
+            .join(crate::vault::VAULT_CONFIG_DIR)
+            .join("snapshots");
+        let legacy_name = "a__b.md_20240101_120000.000000000";
+        std::fs::write(snapshots_dir.join(legacy_name), "legacy content").unwrap();
+
+        // list_snapshots should find it even though it uses __ not _-
+        let snapshots = vault.list_snapshots("a/b.md").unwrap();
+        assert!(
+            snapshots.iter().any(|s| s == legacy_name),
+            "Should find legacy __ encoded snapshot, got: {:?}",
+            snapshots
+        );
     }
 }

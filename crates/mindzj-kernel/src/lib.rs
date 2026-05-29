@@ -11,7 +11,7 @@ pub use error::{KernelError, KernelResult};
 use crate::links::LinkIndex;
 use crate::search::SearchIndex;
 use crate::types::{AppSettings, HotkeyBinding, VaultEntry, WorkspaceState};
-use crate::vault::Vault;
+use crate::vault::{Vault, atomic_write_file};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use tracing::info;
@@ -27,6 +27,9 @@ pub struct VaultContext {
     pub link_index: Mutex<LinkIndex>,
     pub search_index: Mutex<SearchIndex>,
     pub settings: RwLock<AppSettings>,
+    // Lock ordering: Vault::write_lock > config_write_lock > PLUGINS_WRITE_LOCK
+    // This lock serialises config file writes. Never hold with write_lock.
+    config_write_lock: Mutex<()>,  // Serialises concurrent atomic_write_file calls
 }
 
 impl VaultContext {
@@ -36,6 +39,7 @@ impl VaultContext {
             link_index: Mutex::new(LinkIndex::new()),
             search_index: Mutex::new(SearchIndex::new()),
             settings: RwLock::new(AppSettings::default()),
+            config_write_lock: Mutex::new(()),
         }
     }
 
@@ -73,7 +77,14 @@ impl VaultContext {
             KernelError::Io(std::io::Error::other("Settings lock poisoned"))
         })?;
         let json = serde_json::to_string_pretty(&*s)?;
-        std::fs::write(dir.join("settings.json"), json)?;
+        let _lock = self.config_write_lock.lock().map_err(|_| {
+            KernelError::Io(std::io::Error::other("Config write lock poisoned"))
+        })?;
+        let path = dir.join("settings.json");
+        atomic_write_file(&path, |file| {
+            use std::io::Write;
+            file.write_all(json.as_bytes())
+        })?;
         Ok(())
     }
 
@@ -93,7 +104,14 @@ impl VaultContext {
     pub fn save_workspace(&self, ws: &WorkspaceState) -> KernelResult<()> {
         let dir = self.ensure_mindzj_dir()?;
         let json = serde_json::to_string_pretty(ws)?;
-        std::fs::write(dir.join("workspace.json"), json)?;
+        let _lock = self.config_write_lock.lock().map_err(|_| {
+            KernelError::Io(std::io::Error::other("Config write lock poisoned"))
+        })?;
+        let path = dir.join("workspace.json");
+        atomic_write_file(&path, |file| {
+            use std::io::Write;
+            file.write_all(json.as_bytes())
+        })?;
         Ok(())
     }
 
@@ -113,7 +131,14 @@ impl VaultContext {
     pub fn save_hotkeys(&self, bindings: &[HotkeyBinding]) -> KernelResult<()> {
         let dir = self.ensure_mindzj_dir()?;
         let json = serde_json::to_string_pretty(bindings)?;
-        std::fs::write(dir.join("hotkeys.json"), json)?;
+        let _lock = self.config_write_lock.lock().map_err(|_| {
+            KernelError::Io(std::io::Error::other("Config write lock poisoned"))
+        })?;
+        let path = dir.join("hotkeys.json");
+        atomic_write_file(&path, |file| {
+            use std::io::Write;
+            file.write_all(json.as_bytes())
+        })?;
         Ok(())
     }
 
@@ -200,6 +225,7 @@ pub fn open_vault_context(path: &std::path::Path, name: &str) -> KernelResult<Ar
 mod tests {
     use super::*;
     use tempfile::TempDir;
+    use std::fs;
     use tracing_test::traced_test;
 
     /// Write raw bytes directly to a file inside the vault,
@@ -258,5 +284,91 @@ mod tests {
              but none was emitted. Add a warn! in the else branch of \
              index_entries_recursive for the read_file call."
         );
+    }
+
+    #[test]
+    fn save_settings_atomic() {
+        let tmp = TempDir::new().unwrap();
+        let vault = Vault::open(tmp.path(), "test-vault").unwrap();
+        let ctx = VaultContext::new(vault);
+        ctx.save_settings().unwrap();
+
+        // No .tmp files left behind
+        let mindzj_dir = tmp.path().join(".mindzj");
+        let entries: Vec<_> = fs::read_dir(&mindzj_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(entries.is_empty(), "No .tmp files after save_settings");
+
+        // Content is valid JSON
+        let content = fs::read_to_string(mindzj_dir.join("settings.json")).unwrap();
+        assert!(serde_json::from_str::<serde_json::Value>(&content).is_ok());
+    }
+
+    #[test]
+    fn save_workspace_atomic() {
+        let tmp = TempDir::new().unwrap();
+        let vault = Vault::open(tmp.path(), "test-vault").unwrap();
+        let ctx = VaultContext::new(vault);
+        let ws = WorkspaceState::default();
+        ctx.save_workspace(&ws).unwrap();
+
+        let mindzj_dir = tmp.path().join(".mindzj");
+        let entries: Vec<_> = fs::read_dir(&mindzj_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(entries.is_empty());
+
+        let content = fs::read_to_string(mindzj_dir.join("workspace.json")).unwrap();
+        assert!(serde_json::from_str::<serde_json::Value>(&content).is_ok());
+    }
+
+    #[test]
+    fn save_hotkeys_atomic() {
+        let tmp = TempDir::new().unwrap();
+        let vault = Vault::open(tmp.path(), "test-vault").unwrap();
+        let ctx = VaultContext::new(vault);
+        ctx.save_hotkeys(&[]).unwrap();
+
+        let mindzj_dir = tmp.path().join(".mindzj");
+        let entries: Vec<_> = fs::read_dir(&mindzj_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(entries.is_empty());
+
+        let content = fs::read_to_string(mindzj_dir.join("hotkeys.json")).unwrap();
+        assert!(serde_json::from_str::<serde_json::Value>(&content).is_ok());
+    }
+
+    #[test]
+    fn concurrent_config_saves_dont_corrupt() {
+        let tmp = tempfile::tempdir().unwrap();
+        let vault = Vault::open(tmp.path(), "test-vault").unwrap();
+        let ctx = std::sync::Arc::new(VaultContext::new(vault));
+
+        // Spawn multiple concurrent saves
+        let handles: Vec<_> = (0..10)
+            .map(|_| {
+                let ctx = ctx.clone();
+                std::thread::spawn(move || {
+                    ctx.save_settings().unwrap();
+                })
+            })
+            .collect();
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        // File should be valid JSON
+        let content =
+            std::fs::read_to_string(ctx.mindzj_dir().join("settings.json")).unwrap();
+        assert!(serde_json::from_str::<serde_json::Value>(&content).is_ok());
     }
 }

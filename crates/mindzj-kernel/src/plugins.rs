@@ -1,6 +1,12 @@
 use crate::error::{KernelError, KernelResult};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use crate::vault::atomic_write_file;
+use std::sync::Mutex;
+
+// Lock ordering: Vault::write_lock > VaultContext::config_write_lock > PLUGINS_WRITE_LOCK
+// Process-global: serialises plugin config writes across all vault instances.
+static PLUGINS_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 /// Obsidian-compatible plugin manifest (manifest.json)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,12 +120,15 @@ pub fn read_enabled_plugins(vault_root: &Path) -> Vec<String> {
 /// Write the enabled plugins list to `.mindzj/plugins.json`.
 pub fn write_enabled_plugins(vault_root: &Path, plugins: &[String]) -> KernelResult<()> {
     let mindzj_dir = vault_root.join(".mindzj");
-    if !mindzj_dir.exists() {
-        std::fs::create_dir_all(&mindzj_dir)?;
-    }
     let config_path = mindzj_dir.join("plugins.json");
     let content = serde_json::to_string_pretty(plugins)?;
-    std::fs::write(&config_path, content)?;
+    let _lock = PLUGINS_WRITE_LOCK.lock().map_err(|_| {
+        KernelError::Io(std::io::Error::other("Plugins write lock poisoned"))
+    })?;
+    atomic_write_file(&config_path, |file| {
+        use std::io::Write;
+        file.write_all(content.as_bytes())
+    })?;
     Ok(())
 }
 
@@ -385,5 +394,27 @@ mod tests {
         assert!(validate_plugin_id("has space").is_err());
         assert!(validate_plugin_id("has/slash").is_err());
         assert!(validate_plugin_id("null\0injection").is_err());
+    }
+
+    #[test]
+    fn write_enabled_plugins_atomic() {
+        let tmp = tempfile::tempdir().unwrap();
+        let plugins = vec!["core".to_string(), "custom".to_string()];
+
+        write_enabled_plugins(tmp.path(), &plugins).unwrap();
+
+        // No .tmp files
+        let mindzj_dir = tmp.path().join(".mindzj");
+        let entries: Vec<_> = std::fs::read_dir(&mindzj_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(entries.is_empty(), "No .tmp files after write_enabled_plugins");
+
+        // Content is valid JSON
+        let content = std::fs::read_to_string(mindzj_dir.join("plugins.json")).unwrap();
+        let parsed: Vec<String> = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed, plugins);
     }
 }
