@@ -54,6 +54,8 @@ import {
     DEFAULT_ATTACHMENT_FOLDER,
 } from "../../utils/vaultPaths";
 import { t } from "../../i18n";
+import { copyToClipboard } from "@/utils/clipboard";
+import { SEARCH_FLASH_MS } from "@/constants/timeouts";
 import {
     buildExtensions,
     buildZoomTheme,
@@ -890,7 +892,7 @@ export const Editor: Component<EditorProps> = (props) => {
         const text = selection.empty
             ? view.state.doc.lineAt(selection.head).text
             : view.state.sliceDoc(selection.from, selection.to);
-        await navigator.clipboard.writeText(text).catch(() => {});
+        await copyToClipboard(text);
         view.focus();
     }
 
@@ -899,7 +901,7 @@ export const Editor: Component<EditorProps> = (props) => {
         const text = selection.empty
             ? view.state.doc.lineAt(selection.head).text
             : view.state.sliceDoc(selection.from, selection.to);
-        await navigator.clipboard.writeText(text).catch(() => {});
+        await copyToClipboard(text);
         if (selection.empty) {
             deleteLine(view);
             view.focus();
@@ -1599,7 +1601,7 @@ export const Editor: Component<EditorProps> = (props) => {
                         // View destroyed between dispatch and timeout —
                         // safe to ignore, the StateField is gone too.
                     }
-                }, 1000);
+                }, SEARCH_FLASH_MS);
                 break;
             }
             case "search-reveal": {

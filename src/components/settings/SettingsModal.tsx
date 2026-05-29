@@ -38,6 +38,7 @@ import { PluginSettingsPanel } from "./PluginSettingsPanel";
 import { CssSnippetsPanel } from "./CssSnippetsPanel";
 import { SkinPickerPanel } from "./SkinPickerPanel";
 import { titleStyle, titleSelectStyle } from "./styles";
+import { Z_OVERLAY } from "@/constants/zIndex";
 
 
 type SettingsCategory =
@@ -261,7 +262,7 @@ export const SettingsModal: Component<SettingsModalProps> = (props) => {
             style={{
                 position: "fixed",
                 inset: "0",
-                "z-index": "9999",
+                "z-index": Z_OVERLAY,
                 display: "flex",
                 background: "rgba(0,0,0,0.5)",
             }}

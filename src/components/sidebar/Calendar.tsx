@@ -2,6 +2,7 @@ import { Component, For, Show, createMemo, createSignal, onCleanup } from "solid
 import { invoke } from "@tauri-apps/api/core";
 import { formatMonthYear, getMonthLabels, getWeekdayLabels, t } from "../../i18n";
 import { vaultStore, type VaultEntry } from "../../stores/vault";
+import { Z_BASE } from "@/constants/zIndex";
 
 interface CalendarDay {
   day: number;
@@ -483,7 +484,7 @@ export const Calendar: Component = () => {
             "border-radius": "var(--mz-radius-md)",
             "box-shadow": "0 8px 24px rgba(0,0,0,0.35)",
             padding: "12px",
-            "z-index": "100",
+            "z-index": Z_BASE,
           }}
         >
           <div

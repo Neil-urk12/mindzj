@@ -12,6 +12,7 @@ import { linkifyHtmlText, ensureScheme } from "./autoLink";
 import { parseImageSize } from "./imageSize";
 import { settingsStore } from "../stores/settings";
 import { t } from "../i18n";
+import { READING_FLASH_MS } from "../constants/timeouts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -257,7 +258,7 @@ export function markdownToHtml(md: string, ctx: RenderContext): string {
                 );
             } else {
                 html.push(
-                    `<div class="mz-rv-code${lineNumberClass}"${langAttr}>${langBadge}<button class="mz-rv-code-copy" onclick="navigator.clipboard.writeText(this.parentElement.querySelector('code').textContent).then(()=>{this.textContent='${escapeAttr(t("common.copyDone"))}';setTimeout(()=>this.textContent='${escapeAttr(t("common.copy"))}',1500)})">${t("common.copy")}</button><pre><code>${code}</code></pre></div>`,
+                    `<div class="mz-rv-code${lineNumberClass}"${langAttr}>${langBadge}<button class="mz-rv-code-copy" onclick="navigator.clipboard.writeText(this.parentElement.querySelector('code').textContent).then(()=>{this.textContent='${escapeAttr(t("common.copyDone"))}';setTimeout(()=>this.textContent='${escapeAttr(t("common.copy"))}',${READING_FLASH_MS})})">${t("common.copy")}</button><pre><code>${code}</code></pre></div>`,
                 );
             }
             continue;

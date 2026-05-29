@@ -13,6 +13,7 @@ import { editorStore, type ViewMode } from "../../stores/editor";
 import type { FileContent } from "../../stores/vault";
 import { displayName } from "../../utils/displayName";
 import { isMarkdownPath } from "../../utils/fileTypes";
+import { Z_TOOLTIP, Z_TOOLTIP_TOP } from "@/constants/zIndex";
 
 // Tab width bounds. Each tab sizes itself to its filename via
 // `computeTabWidth` below; these constants just cap the result.
@@ -618,7 +619,7 @@ export const TabBar: Component<TabBarProps> = (props) => {
                 "border-radius": "var(--mz-radius-md)",
                 "box-shadow": "0 8px 24px rgba(0,0,0,0.35)",
                 padding: "4px 0",
-                "z-index": "2147483646",
+                "z-index": Z_TOOLTIP,
                 "font-size": "var(--mz-font-size-sm)",
                 "font-family": "var(--mz-font-sans)",
                 "user-select": "none",
@@ -731,7 +732,7 @@ export const TabBar: Component<TabBarProps> = (props) => {
                 "max-width": "min(480px, calc(100vw - 16px))",
                 "word-break": "break-word",
                 "pointer-events": "none",
-                "z-index": "2147483647",
+                "z-index": Z_TOOLTIP_TOP,
               }}
             >
               {tabTooltip().fullPath}

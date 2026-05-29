@@ -1,22 +1,5 @@
 pub mod api;
 pub mod kernel;
-// Kept on disk for reference / rollback but NOT installed at startup.
-// The low-level WH_KEYBOARD_LL hook used to install here was the only
-// in-process way to claim Ctrl+Alt+Left/Right tab-switching against
-// Intel graphics driver hotkeys — but any `WH_KEYBOARD_LL` the app
-// installs joins the system-wide hook chain, and even though the
-// hook proc only consumes Ctrl+Alt+Arrow (falling through via
-// `CallNextHookEx` for everything else), the added latency trips
-// `LowLevelHooksTimeout` on this user's machine and causes Windows
-// to silently drop Win+F, Win+E and PowerToys hotkeys. The correct
-// fix is to disable Intel's screen-rotation hotkeys at the source
-// (Intel Graphics Command Center → System → Hot Keys → off, or
-// disable the `igfxHK` startup task). With Intel's hook out of the
-// chain, Ctrl+Alt+Arrow arrives at the DOM keydown listener
-// unmolested and the in-JS `handleTabSwitchKeydown` handles it.
-#[cfg(windows)]
-#[allow(dead_code)]
-mod keyboard_hook;
 
 use api::settings_api::{apply_window_state, load_window_state_sync};
 use kernel::error::CommandError;

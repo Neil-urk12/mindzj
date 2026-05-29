@@ -34,3 +34,12 @@ export const WINDOW_SAVE_DEBOUNCE_MS = 500;
 export const NOTICE_FADE_MS = 300;
 export const NOTICE_DISMISS_MS = 4000;
 export const IMAGE_RESIZE_DEBOUNCE_MS = 200;
+
+// ── PDF export ──
+export const PDF_EXPORT_TIMEOUT_MS = 30000;
+
+// ── Skin picker ──
+export const SKIN_PREVIEW_DELAY_MS = 2400;
+
+// ── Search panel ──
+export const SEARCH_INPUT_DEBOUNCE_MS = 150;

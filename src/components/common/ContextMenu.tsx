@@ -8,6 +8,7 @@ import {
   onCleanup,
   onMount,
 } from "solid-js";
+import { Z_CONTEXT_MENU } from "@/constants/zIndex";
 import { t } from "../../i18n";
 
 export interface MenuItem {
@@ -95,7 +96,7 @@ export const ContextMenu: Component<ContextMenuProps> = (props) => {
       style={{
         position: "fixed",
         inset: "0",
-        "z-index": "10000",
+        "z-index": Z_CONTEXT_MENU,
         "pointer-events": "none",
       }}
     >

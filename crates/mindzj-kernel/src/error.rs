@@ -1,11 +1,9 @@
-use serde::Serialize;
 use thiserror::Error;
 
 /// Central error type for all kernel operations.
 /// Each variant maps to a specific failure domain, making error handling
 /// precise and debuggable across the entire backend.
 #[derive(Error, Debug)]
-#[allow(dead_code)]
 pub enum KernelError {
     #[error("Vault not found: {0}")]
     VaultNotFound(String),
@@ -59,47 +57,31 @@ pub enum KernelError {
     InvalidInput(String),
 }
 
-/// Serializable error wrapper for Tauri command responses.
-/// Tauri requires command errors to implement `Serialize` so they
-/// can cross the IPC boundary to the frontend.
-#[derive(Debug, Serialize)]
-pub struct CommandError {
-    pub code: String,
-    pub message: String,
-}
-
-impl From<KernelError> for CommandError {
-    fn from(err: KernelError) -> Self {
-        let code = match &err {
-            KernelError::VaultNotFound(_) => "VAULT_NOT_FOUND",
-            KernelError::VaultAlreadyOpen(_) => "VAULT_ALREADY_OPEN",
-            KernelError::FileNotFound(_) => "FILE_NOT_FOUND",
-            KernelError::FileAlreadyExists(_) => "FILE_ALREADY_EXISTS",
-            KernelError::PathTraversalDenied(_) => "PATH_TRAVERSAL_DENIED",
-            KernelError::InvalidFileName(_) => "INVALID_FILE_NAME",
-            KernelError::Io(_) => "IO_ERROR",
-            KernelError::Database(_) => "DATABASE_ERROR",
-            KernelError::Index(_) => "INDEX_ERROR",
-            KernelError::Serialization(_) => "SERIALIZATION_ERROR",
-            KernelError::AuthFailed(_) => "AUTH_FAILED",
-            KernelError::PermissionDenied(_) => "PERMISSION_DENIED",
-            KernelError::Plugin(_) => "PLUGIN_ERROR",
-            KernelError::AiProvider(_) => "AI_PROVIDER_ERROR",
-            KernelError::Config(_) => "CONFIG_ERROR",
-            KernelError::FileTooLarge(_) => "FILE_TOO_LARGE",
-            KernelError::InvalidInput(_) => "INVALID_INPUT",
-        };
-        CommandError {
-            code: code.to_string(),
-            message: err.to_string(),
-        }
-    }
-}
-
-impl std::fmt::Display for CommandError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}] {}", self.code, self.message)
-    }
-}
-
 pub type KernelResult<T> = Result<T, KernelError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kernel_error_display() {
+        let err = KernelError::VaultNotFound("test".into());
+        assert_eq!(err.to_string(), "Vault not found: test");
+
+        let err = KernelError::FileNotFound("test".into());
+        assert_eq!(err.to_string(), "File not found: test");
+    }
+
+    #[test]
+    fn kernel_error_from_io() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "gone");
+        let err: KernelError = io_err.into();
+        assert!(err.to_string().contains("gone"));
+    }
+
+    #[test]
+    fn kernel_result_type_alias() {
+        let ok: KernelResult<i32> = Ok(42);
+        assert_eq!(ok.unwrap(), 42);
+    }
+}

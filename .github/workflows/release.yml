@@ -72,11 +72,11 @@ jobs:
       release_id: ${{ steps.create-release.outputs.result }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Create draft GitHub Release
         id: create-release
-        uses: actions/github-script@v9.0.0
+        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0
         env:
           # `github.ref_name` gives "v0.1.0" for tag pushes but "main"
           # for workflow_dispatch runs on the default branch — so for
@@ -172,19 +172,19 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Enable corepack
         run: corepack enable
 
       - name: Setup Node 24.14.1
-        uses: actions/setup-node@v6.4.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 24.14.1
           cache: 'pnpm'
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@1.94.1
+        uses: dtolnay/rust-toolchain@aad518f59d88bae90133242f9ddac7f8bbc5dddf # 1.94.1
         with:
           # Only macOS needs the extra darwin targets — on Linux and
           # Windows this expression evaluates to an empty string, which
@@ -192,7 +192,7 @@ jobs:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Cache Rust build
-        uses: swatinem/rust-cache@v2.9.1
+        uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           # The `path -> target_dir` syntax tells the action where the
           # workspace root and its `target/` directory live. Caching
@@ -264,7 +264,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build and upload via tauri-action
-        uses: tauri-apps/tauri-action@v0.6.2
+        uses: tauri-apps/tauri-action@1ddc7b49b13c3038297360482fcb3e058764d7c9 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # GITHUB_TOKEN is auto-provided by GH Actions. No secrets

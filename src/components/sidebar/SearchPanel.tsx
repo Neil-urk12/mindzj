@@ -6,6 +6,7 @@ import { openFileRouted } from "../../utils/openFileRouted";
 import { vaultStore, type VaultEntry } from "../../stores/vault";
 import { editorStore } from "../../stores/editor";
 import { confirmDialog } from "../common/ConfirmDialog";
+import { SEARCH_INPUT_DEBOUNCE_MS } from "../../constants/timeouts";
 
 interface SearchResult {
   path: string;
@@ -465,7 +466,7 @@ export const SearchPanel: Component = () => {
       console.warn("[search] openFileRouted failed:", e);
       return;
     }
-    setTimeout(dispatchReveal, 150);
+    setTimeout(dispatchReveal, SEARCH_INPUT_DEBOUNCE_MS);
   };
 
   /**

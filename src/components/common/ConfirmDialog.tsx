@@ -4,11 +4,12 @@
 
 import { Component, Show, createEffect, createSignal, onCleanup } from "solid-js";
 import { t } from "../../i18n";
+import { Z_MODAL } from "@/constants/zIndex";
 
 const backdropStyle = {
   position: "fixed",
   inset: "0",
-  "z-index": "20000",
+  "z-index": Z_MODAL,
   display: "flex",
   "align-items": "center",
   "justify-content": "center",

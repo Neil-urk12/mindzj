@@ -7,6 +7,7 @@ import {
   on,
   onCleanup,
 } from "solid-js";
+import { Z_OVERLAY } from "@/constants/zIndex";
 import { invoke } from "@tauri-apps/api/core";
 import { t } from "../../i18n";
 import { vaultStore } from "../../stores/vault";
@@ -150,7 +151,7 @@ export const StatusBar: Component = () => {
             "box-shadow": "0 8px 28px rgba(0,0,0,0.3)",
             padding: "8px 0",
             "font-size": "var(--mz-font-size-sm)",
-            "z-index": "9999",
+            "z-index": Z_OVERLAY,
           }}
         >
           <div

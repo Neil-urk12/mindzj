@@ -1,6 +1,7 @@
 import { Component, createSignal, For, onMount, onCleanup, Show } from "solid-js";
 import { vaultStore } from "../../stores/vault";
 import { t } from "../../i18n";
+import { Z_DROPDOWN } from "@/constants/zIndex";
 
 // Vault Switcher Popup (bottom-left of sidebar)
 // ============================================================================
@@ -64,7 +65,7 @@ export const VaultSwitcher: Component<{
                 "border-radius": "var(--mz-radius-md)",
                 "box-shadow": "0 8px 24px rgba(0,0,0,0.25)",
                 padding: "4px 0",
-                "z-index": "1000",
+                "z-index": Z_DROPDOWN,
             }}>
             {/* Vault list */}
             <For each={vaults()}>

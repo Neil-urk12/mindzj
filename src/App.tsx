@@ -70,6 +70,8 @@ import { useScreenshot } from "./hooks/useScreenshot";
 import { usePdfExport } from "./hooks/usePdfExport";
 import { useAiPanel } from "./hooks/useAiPanel";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { SHORTCUT_TOAST_DISMISS_MS, WINDOW_SAVE_DEBOUNCE_MS } from "./constants/timeouts";
+import { Z_SCREENSHOT_UI } from "./constants/zIndex";
 
 type SidebarTab = "files" | "outline" | "search" | "calendar";
 
@@ -217,7 +219,7 @@ const App: Component = () => {
     function showShortcutToast(message: string) {
         setShortcutToast(message);
         if (shortcutToastTimer) clearTimeout(shortcutToastTimer);
-        shortcutToastTimer = setTimeout(() => setShortcutToast(null), 1200);
+        shortcutToastTimer = setTimeout(() => setShortcutToast(null), SHORTCUT_TOAST_DISMISS_MS);
     }
 
     // Hooks
@@ -898,7 +900,7 @@ const App: Component = () => {
         let _winSaveTimer: ReturnType<typeof setTimeout> | null = null;
         const debouncedSaveWindowState = () => {
             if (_winSaveTimer) clearTimeout(_winSaveTimer);
-            _winSaveTimer = setTimeout(captureAndSaveWindowState, 500);
+            _winSaveTimer = setTimeout(captureAndSaveWindowState, WINDOW_SAVE_DEBOUNCE_MS);
         };
         const unlistenResize = await _aw.onResized(debouncedSaveWindowState);
         const unlistenMove = await _aw.onMoved(debouncedSaveWindowState);
@@ -2246,7 +2248,7 @@ const App: Component = () => {
                         "font-family": "var(--mz-font-mono, monospace)",
                         "font-size": "12px",
                         "pointer-events": "none",
-                        "z-index": "100000",
+                        "z-index": Z_SCREENSHOT_UI,
                         "box-shadow": "0 4px 12px rgba(0, 0, 0, 0.35)",
                         "white-space": "nowrap",
                     }}>

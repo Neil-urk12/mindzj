@@ -9,6 +9,7 @@ import {
 } from "../../types/app";
 import { formatAiHistoryDate, formatAiHistoryTimestamp } from "../../utils/aiHistory";
 import { AiHistoryDialog } from "./AiHistoryDialog";
+import { Z_STATIC, Z_DROPDOWN } from "@/constants/zIndex";
 
 export const AiBottomPanel: Component<{
     input: string;
@@ -108,7 +109,7 @@ export const AiBottomPanel: Component<{
                         right: "0",
                         height: "8px",
                         cursor: "ns-resize",
-                        "z-index": "3",
+                        "z-index": Z_STATIC,
                     }}
                 />
                 <div
@@ -289,7 +290,7 @@ export const AiBottomPanel: Component<{
                                         "border-radius": "var(--mz-radius-sm)",
                                         "box-shadow":
                                             "0 10px 28px rgba(0,0,0,0.32)",
-                                        "z-index": "1000",
+                                        "z-index": Z_DROPDOWN,
                                         color: "var(--mz-text-primary)",
                                     }}>
                                     <div

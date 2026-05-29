@@ -3,6 +3,7 @@ import type { AiQuestionHistoryEntry, Point } from "../../types/app";
 import { formatAiHistoryDate, formatAiHistoryTimestamp } from "../../utils/aiHistory";
 import { t } from "../../i18n";
 import { Copy, Trash2, X } from "lucide-solid";
+import { Z_SCREENSHOT_UI } from "@/constants/zIndex";
 
 function hoverAiActionButton(event: MouseEvent) {
     const target = event.currentTarget as HTMLElement;
@@ -102,7 +103,7 @@ export const AiHistoryDialog: Component<{
                 border: "1px solid var(--mz-border)",
                 "border-radius": "var(--mz-radius-sm)",
                 "box-shadow": "0 14px 40px rgba(0,0,0,0.42)",
-                "z-index": "100000",
+                "z-index": Z_SCREENSHOT_UI,
                 color: "var(--mz-text-primary)",
                 overflow: "hidden",
                 "font-family": "var(--mz-font-sans)",

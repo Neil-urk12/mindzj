@@ -11,6 +11,9 @@ import { openFileRouted } from "../../utils/openFileRouted";
 import { isMarkdownPath } from "../../utils/fileTypes";
 import { FILE_ORDER_PATH, FOLDER_STATE_PATH } from "../../constants/vaultPaths";
 import { t } from "../../i18n";
+import { Z_BASE, Z_CONTEXT_MENU } from "@/constants/zIndex";
+import { FOLDER_STATE_SAVE_DEBOUNCE_MS, FILE_TREE_REVEAL_MS } from "../../constants/timeouts";
+import { copyToClipboard } from "@/utils/clipboard";
 
 type FolderVisibilityAction = "default" | "collapse" | "expand";
 
@@ -193,7 +196,7 @@ export function revealFileInTree(path: string) {
         target.classList.add("mz-file-tree-reveal-highlight");
         window.setTimeout(() => {
             target.classList.remove("mz-file-tree-reveal-highlight");
-        }, 1500);
+        }, FILE_TREE_REVEAL_MS);
     };
 
     // Kick off on the next frame so Solid has committed any pending
@@ -396,7 +399,7 @@ export async function saveFolderState(): Promise<void> {
 
 function scheduleFolderStateSave(): void {
     if (_folderStateSaveTimer) clearTimeout(_folderStateSaveTimer);
-    _folderStateSaveTimer = setTimeout(() => saveFolderState(), 1000);
+    _folderStateSaveTimer = setTimeout(() => saveFolderState(), FOLDER_STATE_SAVE_DEBOUNCE_MS);
 }
 
 export function resetFolderState() {
@@ -550,7 +553,7 @@ function startDrag(
             Object.assign(ghost.style, {
                 position: "fixed",
                 pointerEvents: "none",
-                zIndex: "10000",
+                zIndex: Z_CONTEXT_MENU,
                 background: "var(--mz-bg-secondary, #2b2b2b)",
                 color: "var(--mz-text-primary, #ddd)",
                 padding: "4px 12px",
@@ -778,7 +781,7 @@ function installGlobalDragTracking() {
                     opacity: "1",
                     borderRadius: "1px",
                     pointerEvents: "none",
-                    zIndex: "10000",
+                    zIndex: Z_CONTEXT_MENU,
                 });
 
                 // Position the line relative to the item
@@ -872,7 +875,7 @@ export const SortBar: Component<{
                         border: "1px solid var(--mz-border-strong)",
                         "border-radius": "var(--mz-radius-md)",
                         "box-shadow": "0 4px 16px rgba(0,0,0,0.2)",
-                        padding: "4px 0", "z-index": "100",
+                        padding: "4px 0", "z-index": Z_BASE,
                     }}
                     onMouseLeave={() => setShowDropdown(false)}
                 >
@@ -944,7 +947,7 @@ export const FileTree: Component<FileTreeProps> = (props) => {
             await invoke("reveal_in_file_manager", { relativePath: path });
         } catch (e) {
             console.error("Open in file manager failed:", e);
-            navigator.clipboard.writeText(path).catch(() => {});
+            copyToClipboard(path);
         }
     }
 

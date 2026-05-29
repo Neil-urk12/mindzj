@@ -1,3 +1,5 @@
+import { IMAGE_RESIZE_DEBOUNCE_MS } from "../constants/timeouts";
+
 /**
  * Image interaction utilities for MindZJ
  *
@@ -24,6 +26,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { settingsStore } from "../stores/settings";
 import { openFileRouted } from "./openFileRouted";
 import { t } from "../i18n";
+import { Z_PLUGIN_DRAW, Z_SCREENSHOT_CONTEXT } from "@/constants/zIndex";
+import { copyToClipboard } from "./clipboard";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -193,7 +197,7 @@ export function attachWheelZoom(
         persistTimer = setTimeout(() => {
           persistTimer = null;
           opts.onResize!(lastCommittedWidth);
-        }, 200);
+        }, IMAGE_RESIZE_DEBOUNCE_MS);
       }
     });
   }
@@ -340,7 +344,7 @@ export function showImageContextMenu(
     menu.className = "mz-image-context-menu";
     Object.assign(menu.style, {
         position: "fixed",
-        zIndex: "10002",
+        zIndex: Z_SCREENSHOT_CONTEXT,
         background: "var(--mz-bg-secondary, #2b2b2b)",
         border: "1px solid var(--mz-border-strong, #555)",
         borderRadius: "6px",
@@ -421,7 +425,7 @@ export function showImageContextMenu(
 
     // -- Copy image path --
     addMenuItem(t("livePreview.copyImagePath"), () => {
-        navigator.clipboard.writeText(imageSrc).catch(() => {});
+        copyToClipboard(imageSrc);
     });
 
     // -- Open in default app --
@@ -538,7 +542,7 @@ export function showImageContextMenu(
     Object.assign(backdrop.style, {
         position: "fixed",
         inset: "0",
-        zIndex: "10001",
+        zIndex: Z_PLUGIN_DRAW,
         background: "transparent",
     });
 

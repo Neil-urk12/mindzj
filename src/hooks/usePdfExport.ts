@@ -14,6 +14,7 @@ import {
 } from "../utils/markdownRenderer";
 import { t } from "../i18n";
 import { getClientPlatform } from "../utils/platform";
+import { PDF_EXPORT_TIMEOUT_MS } from "../constants/timeouts";
 
 const CLIENT_PLATFORM = getClientPlatform();
 
@@ -194,7 +195,7 @@ async function openNativePrintDialogForPdfExport(): Promise<void> {
 
         window.addEventListener("afterprint", done, { once: true });
         window.print();
-        fallbackTimer = setTimeout(done, 30000);
+        fallbackTimer = setTimeout(done, PDF_EXPORT_TIMEOUT_MS);
     });
 }
 

@@ -41,7 +41,6 @@ export default defineConfig(async () => ({
       "solid-js/web",
       "katex",
       "lucide-solid",
-      "sortablejs",
       "@tauri-apps/api/core",
       "@tauri-apps/api/window",
       "@tauri-apps/api/event",

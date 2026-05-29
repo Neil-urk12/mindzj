@@ -10,6 +10,7 @@ import {
 import { t } from "../../i18n";
 import { editorStore } from "../../stores/editor";
 import { vaultStore } from "../../stores/vault";
+import { Z_BASE, Z_CONTEXT_MENU } from "@/constants/zIndex";
 
 interface ToolbarButton {
   command: string;
@@ -224,7 +225,7 @@ export const Toolbar: Component = () => {
         background: "var(--mz-bg-secondary)",
         "border-bottom": "1px solid var(--mz-border)",
         position: "relative",
-        "z-index": "100",
+        "z-index": Z_BASE,
         "flex-shrink": "0",
       }}
     >
@@ -358,7 +359,7 @@ export const Toolbar: Component = () => {
             "border-radius": "var(--mz-radius-md)",
             "box-shadow": "0 4px 16px rgba(0,0,0,0.25)",
             padding: "4px 0",
-            "z-index": "10000",
+            "z-index": Z_CONTEXT_MENU,
           }}
           onMouseLeave={() => setShowHeadingMenu(false)}
         >
@@ -394,7 +395,7 @@ export const Toolbar: Component = () => {
             "border-radius": "var(--mz-radius-md)",
             "box-shadow": "0 4px 16px rgba(0,0,0,0.3)",
             padding: "4px 0",
-            "z-index": "10000",
+            "z-index": Z_CONTEXT_MENU,
           }}
           onMouseLeave={() => setShowOverflowMenu(false)}
         >

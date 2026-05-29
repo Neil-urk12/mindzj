@@ -3,6 +3,7 @@ import { vaultStore } from "../stores/vault";
 import { getClientPlatform } from "../utils/platform";
 import { toVaultAssetUrl } from "../utils/vaultPaths";
 import { VAULT_CONFIG_DIR, IMAGES_DIR, PLUGINS_DIR } from "../constants/vaultPaths";
+import { Z_CONTEXT_MENU, Z_BASE, Z_SCREENSHOT_CONTEXT, Z_PLUGIN_DRAW } from "@/constants/zIndex";
 import {
     type LoadedPlugin,
     getScopedPluginLocalStorageKey,
@@ -27,6 +28,7 @@ import { posToOffset, offsetToPos } from "./editorUtils";
 import { EditorSelection } from "@codemirror/state";
 import { undo, redo } from "@codemirror/commands";
 import type { ViewMode } from "../stores/editor";
+import { NOTICE_FADE_MS, NOTICE_DISMISS_MS } from "@/constants/timeouts";
 
 // Plugin data directory map — re-exported from standalone module
 import { getPluginDataDir, setPluginDataDir, deletePluginDataDir } from "./plugin-data-dir";
@@ -1682,7 +1684,7 @@ export function createObsidianShim(pluginId: string) {
                 padding: "8px 20px",
                 borderRadius: "6px",
                 fontSize: "13px",
-                zIndex: "10000",
+                zIndex: Z_CONTEXT_MENU,
                 boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
                 transition: "opacity 300ms",
                 opacity: "1",
@@ -1690,8 +1692,8 @@ export function createObsidianShim(pluginId: string) {
             document.body.appendChild(this.noticeEl);
             setTimeout(() => {
                 this.noticeEl.style.opacity = "0";
-                setTimeout(() => this.noticeEl.remove(), 300);
-            }, timeout || 4000);
+                setTimeout(() => this.noticeEl.remove(), NOTICE_FADE_MS);
+            }, timeout || NOTICE_DISMISS_MS);
         }
         hide() {
             this.noticeEl.remove();
@@ -2371,7 +2373,7 @@ export function createObsidianShim(pluginId: string) {
                 "border-radius": "4px",
                 "max-height": "200px",
                 overflow: "auto",
-                "z-index": "100",
+                "z-index": Z_BASE,
                 display: "none",
                 "box-shadow": "0 4px 12px rgba(0,0,0,0.2)",
             });
@@ -2568,7 +2570,7 @@ export function createObsidianShim(pluginId: string) {
             Object.assign(this._backdropEl.style, {
                 position: "fixed",
                 inset: "0",
-                zIndex: "10000",
+                zIndex: Z_CONTEXT_MENU,
                 background: "rgba(0,0,0,0.5)",
                 display: "flex",
                 alignItems: "center",
@@ -2776,7 +2778,7 @@ export function createObsidianShim(pluginId: string) {
             this.dom.className = "menu obsidian-menu";
             Object.assign(this.dom.style, {
                 position: "fixed",
-                zIndex: "10002",
+                zIndex: Z_SCREENSHOT_CONTEXT,
                 background: "var(--mz-bg-secondary, #2b2b2b)",
                 border: "1px solid var(--mz-border-strong, #555)",
                 borderRadius: "6px",
@@ -2920,7 +2922,7 @@ export function createObsidianShim(pluginId: string) {
             Object.assign(this._backdrop.style, {
                 position: "fixed",
                 inset: "0",
-                zIndex: "10001",
+                zIndex: Z_PLUGIN_DRAW,
                 background: "transparent",
             });
             this._backdrop.addEventListener("mousedown", (ev: MouseEvent) => {
@@ -2943,7 +2945,7 @@ export function createObsidianShim(pluginId: string) {
             Object.assign(this._backdrop.style, {
                 position: "fixed",
                 inset: "0",
-                zIndex: "10001",
+                zIndex: Z_PLUGIN_DRAW,
                 background: "transparent",
             });
             this._backdrop.addEventListener("mousedown", () => this.close());

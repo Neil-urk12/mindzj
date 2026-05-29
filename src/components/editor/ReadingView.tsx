@@ -46,6 +46,8 @@ import {
 import { parseImageSize, formatImageAlt } from "../../utils/imageSize";
 import { invoke } from "@tauri-apps/api/core";
 import { t } from "../../i18n";
+import { copyToClipboard } from "@/utils/clipboard";
+import { READING_FLASH_MS, READING_SCROLL_THROTTLE_MS } from "@/constants/timeouts";
 
 import {
     type RenderContext,
@@ -269,7 +271,7 @@ function flashReadingSearch(
     _readingFlashTimer = window.setTimeout(() => {
         _readingFlashTimer = null;
         clearReadingFlash();
-    }, 1500);
+    }, READING_FLASH_MS);
 }
 
 // ---------------------------------------------------------------------------
@@ -455,7 +457,7 @@ export const ReadingView: Component<ReadingViewProps> = (props) => {
     async function copyReadingSelection() {
         const text = window.getSelection()?.toString() ?? "";
         if (!text) return;
-        await navigator.clipboard.writeText(text).catch(() => {});
+        await copyToClipboard(text);
     }
 
     function buildReadingContextMenu(): MenuItem[] {
@@ -673,7 +675,7 @@ export const ReadingView: Component<ReadingViewProps> = (props) => {
             scrollTimer = window.setTimeout(() => {
                 scrollTimer = null;
                 rememberReadingViewport();
-            }, 60);
+            }, READING_SCROLL_THROTTLE_MS);
         };
         scrollContainerRef?.addEventListener("scroll", onScroll, {
             passive: true,

@@ -7,6 +7,7 @@ import {
   onCleanup,
   onMount,
 } from "solid-js";
+import { Z_OVERLAY } from "@/constants/zIndex";
 import { vaultStore } from "../../stores/vault";
 import { editorStore } from "../../stores/editor";
 import { settingsStore } from "../../stores/settings";
@@ -361,7 +362,7 @@ export const CommandPalette: Component<CommandPaletteProps> = (props) => {
       style={{
         position: "fixed",
         inset: "0",
-        "z-index": "9999",
+        "z-index": Z_OVERLAY,
         display: "flex",
         "flex-direction": "column",
         "align-items": "center",

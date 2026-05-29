@@ -3,9 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getLanguageOptions, t } from "../../i18n";
 import { settingsStore } from "../../stores/settings";
+import { copyToClipboard } from "@/utils/clipboard";
 import { vaultStore } from "../../stores/vault";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { promptDialog } from "./ConfirmDialog";
+import { Z_BASE } from "@/constants/zIndex";
 
 interface VaultRecord {
   name: string;
@@ -164,12 +166,8 @@ export const WelcomeScreen: Component = () => {
       console.error("Failed to reveal vault in file manager:", error);
       // Last-resort fallback: copy the path so the user can paste it
       // into their own file manager.
-      try {
-        await navigator.clipboard.writeText(path);
-        window.alert(t("welcome.copiedPathNotice", { path }));
-      } catch (copyError) {
-        console.error("Clipboard fallback also failed:", copyError);
-      }
+      await copyToClipboard(path);
+      window.alert(t("welcome.copiedPathNotice", { path }));
     }
   };
 
@@ -531,7 +529,7 @@ export const WelcomeScreen: Component = () => {
                 "border-radius": "var(--mz-radius-md)",
                 "box-shadow": "0 8px 24px rgba(0,0,0,0.25)",
                 padding: "4px 0",
-                "z-index": "100",
+                "z-index": Z_BASE,
               }}
             >
               <For each={getLanguageOptions()}>

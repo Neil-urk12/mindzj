@@ -12,6 +12,7 @@
 
 import { Component, createSignal, Show, onMount, onCleanup } from "solid-js";
 import { t } from "../../i18n";
+import { Z_SCREENSHOT, Z_SCREENSHOT_UI, Z_SCREENSHOT_DRAW } from "@/constants/zIndex";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -768,7 +769,7 @@ export const ScreenshotOverlay: Component<ScreenshotOverlayProps> = (props) => {
   // ─── Render ───────────────────────────────────────────────────────
 
   return (
-    <div style={{ position: "fixed", inset: "0", "z-index": "99999", background: "#000", cursor: phase() === "select" ? (selection() && !dragging() ? "default" : "crosshair") : "default", "user-select": "none" }}>
+    <div style={{ position: "fixed", inset: "0", "z-index": Z_SCREENSHOT, background: "#000", cursor: phase() === "select" ? (selection() && !dragging() ? "default" : "crosshair") : "default", "user-select": "none" }} />
 
       {/* Phase 1: Selection */}
       <Show when={phase() === "select"}>
@@ -800,7 +801,7 @@ export const ScreenshotOverlay: Component<ScreenshotOverlayProps> = (props) => {
                   background: "rgba(0, 170, 255, 0.8)",
                   "box-shadow": "0 0 0 1px rgba(0, 0, 0, 0.4)",
                   "pointer-events": "none",
-                  "z-index": "100000",
+                  "z-index": Z_SCREENSHOT_UI,
                 }} />
                 <div style={{
                   position: "fixed",
@@ -811,7 +812,7 @@ export const ScreenshotOverlay: Component<ScreenshotOverlayProps> = (props) => {
                   background: "rgba(0, 170, 255, 0.8)",
                   "box-shadow": "0 0 0 1px rgba(0, 0, 0, 0.4)",
                   "pointer-events": "none",
-                  "z-index": "100000",
+                  "z-index": Z_SCREENSHOT_UI,
                 }} />
                 <div style={{
                   position: "fixed",
@@ -824,7 +825,7 @@ export const ScreenshotOverlay: Component<ScreenshotOverlayProps> = (props) => {
                   "font-family": "Consolas, Menlo, monospace",
                   "border-radius": "3px",
                   "pointer-events": "none",
-                  "z-index": "100001",
+                  "z-index": Z_SCREENSHOT_DRAW,
                   "white-space": "nowrap",
                   "box-shadow": "0 2px 6px rgba(0, 0, 0, 0.4)",
                 }}>
@@ -891,7 +892,7 @@ export const ScreenshotOverlay: Component<ScreenshotOverlayProps> = (props) => {
                       }
                     }, 0);
                   }}
-                  style={{ position: "fixed", left: textInput().x + "px", top: textInput().y + "px", background: "transparent", border: `2px solid ${activeColor()}`, color: activeColor(), "font-size": `${activeFontSize()}px`, padding: "4px 8px", "border-radius": "4px", outline: "none", "min-width": "120px", "font-family": "system-ui", "z-index": "100001" }} />
+                  style={{ position: "fixed", left: textInput().x + "px", top: textInput().y + "px", background: "transparent", border: `2px solid ${activeColor()}`, color: activeColor(), "font-size": `${activeFontSize()}px`, padding: "4px 8px", "border-radius": "4px", outline: "none", "min-width": "120px", "font-family": "system-ui", "z-index": Z_SCREENSHOT_DRAW }} />
               );
             })()}
           </Show>

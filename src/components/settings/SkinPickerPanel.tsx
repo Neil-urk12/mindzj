@@ -32,6 +32,7 @@ import {
 } from "../../styles/themes";
 import { confirmDialog, promptDialog } from "../common/ConfirmDialog";
 import { t } from "../../i18n";
+import { SKIN_PREVIEW_DELAY_MS } from "../../constants/timeouts";
 
 const SYSTEM_SKIN: BuiltInSkin = {
     id: "system",
@@ -52,7 +53,7 @@ export const SkinPickerPanel: Component = () => {
     createEffect(() => {
         const msg = notice();
         if (!msg) return;
-        const timer = window.setTimeout(() => setNotice(null), 2400);
+        const timer = window.setTimeout(() => setNotice(null), SKIN_PREVIEW_DELAY_MS);
         onCleanup(() => window.clearTimeout(timer));
     });
 
