@@ -4,6 +4,7 @@ use chrono::Utc;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Write;
+use std::mem::ManuallyDrop;
 use std::path::{Component, Path, PathBuf};
 use std::sync::RwLock;
 use tracing::{info, warn};
@@ -33,6 +34,16 @@ pub struct Vault {
     root: PathBuf,
     /// Write lock to ensure atomic file operations
     write_lock: RwLock<()>,
+}
+
+/// Guard that removes a temporary file on drop.
+/// Ensures cleanup even if write/fsync/rename fails.
+struct TmpGuard<'a>(&'a Path);
+
+impl Drop for TmpGuard<'_> {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(self.0);
+    }
 }
 
 impl Vault {
@@ -651,21 +662,15 @@ impl Vault {
     // File write operations (atomic + snapshot)
     // -----------------------------------------------------------------------
 
-    /// Write content to a file using atomic write strategy.
-    ///
-    /// Steps:
-    /// 1. Write content to a temporary file (.~name.tmp)
-    /// 2. fsync the temporary file to ensure data is on disk
-    /// 3. Atomically rename the temp file to the target path
-    /// 4. Create a snapshot of the previous version (if file existed)
-    pub fn write_file(
+    /// Core atomic write implementation.
+    /// Handles temp file creation, fsync, and atomic rename.
+    /// The writer closure receives a mutable File handle to write content.
+    pub(crate) fn atomic_write(
         &self,
-        relative_path: &str,
-        content: &str,
-    ) -> KernelResult<FileContent> {
-        let abs_path = self.resolve_safe_path(relative_path)?;
-
-        // Validate the file name
+        abs_path: &Path,
+        writer: impl FnOnce(&mut fs::File) -> std::io::Result<()>,
+    ) -> KernelResult<()> {
+        // Validate file name
         if let Some(name) = abs_path.file_name() {
             Self::validate_file_name(&name.to_string_lossy())?;
         }
@@ -677,23 +682,13 @@ impl Vault {
             }
         }
 
-        // Take snapshot of existing file before overwriting
-        if abs_path.exists() {
-            if let Err(e) = self.create_snapshot(relative_path) {
-                warn!(
-                    "Failed to create snapshot for '{}': {}",
-                    relative_path, e
-                );
-            }
-        }
-
         // Acquire write lock for atomicity
         let _lock = self
             .write_lock
             .write()
             .map_err(|_| KernelError::Io(std::io::Error::other("Write lock poisoned")))?;
 
-        // Step 1: Write to temporary file
+        // Write to temporary file
         let tmp_name = format!(
             ".~{}.tmp",
             abs_path
@@ -706,16 +701,52 @@ impl Vault {
             .unwrap_or(&self.root)
             .join(&tmp_name);
 
-        let mut tmp_file = fs::File::create(&tmp_path)?;
-        tmp_file.write_all(content.as_bytes())?;
+        // Guard ensures temp file cleanup on any error path
+        let guard = TmpGuard(&tmp_path);
 
-        // Step 2: fsync to ensure data is on disk
+        let mut tmp_file = fs::File::create(&tmp_path)?;
+        writer(&mut tmp_file)?;
+
+        // fsync to ensure data is on disk
         tmp_file.sync_all()?;
 
-        // Step 3: Atomic rename. On Windows, renaming over an existing
+        // Atomic rename. On Windows, renaming over an existing
         // destination can fail with "Access is denied"; remove-and-rename
-        // keeps existing-note updates working after the snapshot above.
-        Self::replace_with_temp(&tmp_path, &abs_path)?;
+        // keeps existing-note updates working.
+        Self::replace_with_temp(&tmp_path, abs_path)?;
+
+        // Disarm guard — rename succeeded, temp file no longer exists
+        let _ = ManuallyDrop::new(guard);
+
+        Ok(())
+    }
+
+    /// Write content to a file using atomic write strategy.
+    ///
+    /// Steps:
+    /// 1. Create snapshot of existing file (if present)
+    /// 2. Write content atomically via `atomic_write` helper
+    /// 3. Return file content with hash and modified timestamp
+    pub fn write_file(
+        &self,
+        relative_path: &str,
+        content: &str,
+    ) -> KernelResult<FileContent> {
+        let abs_path = self.resolve_safe_path(relative_path)?;
+
+        // Take snapshot of existing file before overwriting
+        if abs_path.exists() {
+            if let Err(e) = self.create_snapshot(relative_path) {
+                warn!(
+                    "Failed to create snapshot for '{}': {}",
+                    relative_path, e
+                );
+            }
+        }
+
+        self.atomic_write(&abs_path, |file| {
+            file.write_all(content.as_bytes())
+        })?;
 
         info!("File written atomically: {}", relative_path);
 
@@ -765,31 +796,9 @@ impl Vault {
     pub fn write_binary(&self, relative_path: &str, data: &[u8]) -> KernelResult<()> {
         let abs_path = self.resolve_safe_path(relative_path)?;
 
-        if let Some(name) = abs_path.file_name() {
-            Self::validate_file_name(&name.to_string_lossy())?;
-        }
-
-        if let Some(parent) = abs_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)?;
-            }
-        }
-
-        let _lock = self
-            .write_lock
-            .write()
-            .map_err(|_| KernelError::Io(std::io::Error::other("Write lock poisoned")))?;
-
-        let tmp_name = format!(
-            ".~{}.tmp",
-            abs_path.file_name().unwrap_or_default().to_string_lossy()
-        );
-        let tmp_path = abs_path.parent().unwrap_or(&self.root).join(&tmp_name);
-
-        let mut tmp_file = fs::File::create(&tmp_path)?;
-        tmp_file.write_all(data)?;
-        tmp_file.sync_all()?;
-        Self::replace_with_temp(&tmp_path, &abs_path)?;
+        self.atomic_write(&abs_path, |file| {
+            file.write_all(data)
+        })?;
 
         info!("Binary file written: {}", relative_path);
         Ok(())
@@ -1356,4 +1365,99 @@ Another #final-tag.
         let result = vault.read_binary("over_limit.bin");
         assert!(result.is_err(), "File one byte over limit should fail");
 }
+
+    #[test]
+    fn write_file_roundtrip() {
+        let (_tmp, vault) = setup();
+        let content = "# Hello\n\nThis is a test note with **markdown**.";
+        vault.write_file("note.md", content).unwrap();
+        let read = vault.read_file("note.md").unwrap();
+        assert_eq!(read.content, content);
+        assert_eq!(read.path, "note.md");
+        assert!(!read.hash.is_empty());
+    }
+
+    #[test]
+    fn write_binary_cleanup() {
+        let (tmp, vault) = setup();
+        let data = b"binary content here";
+        vault.write_binary("image.png", data).unwrap();
+
+        // No .tmp files should remain
+        let entries: Vec<_> = fs::read_dir(tmp.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .ends_with(".tmp")
+            })
+            .collect();
+        assert!(entries.is_empty(), "Temp files should be cleaned up after binary write");
+
+        // Verify content
+        let read = vault.read_binary("image.png").unwrap();
+        assert_eq!(read, data);
+    }
+
+    #[test]
+    fn write_binary_overwrite() {
+        let (_tmp, vault) = setup();
+        let data1 = b"first version";
+        let data2 = b"second version is longer";
+
+        vault.write_binary("file.bin", data1).unwrap();
+        assert_eq!(vault.read_binary("file.bin").unwrap(), data1);
+
+        vault.write_binary("file.bin", data2).unwrap();
+        assert_eq!(vault.read_binary("file.bin").unwrap(), data2);
+    }
+
+    #[test]
+    fn nested_path_creation() {
+        let (_tmp, vault) = setup();
+
+        // Write to nested path where parent dir doesn't exist
+        vault.write_file("deep/nested/dir/note.md", "# Nested").unwrap();
+        let read = vault.read_file("deep/nested/dir/note.md").unwrap();
+        assert_eq!(read.content, "# Nested");
+
+        // Write binary to nested path
+        vault.write_binary("deep/nested/dir/image.png", b"png data").unwrap();
+        let read = vault.read_binary("deep/nested/dir/image.png").unwrap();
+        assert_eq!(read, b"png data");
+    }
+
+    #[test]
+    fn error_path_cleans_up_tmp_file() {
+        let (_tmp, vault) = setup();
+
+        // First write to create the file
+        vault.write_file("note.md", "original").unwrap();
+
+        // Now attempt a write with a closure that fails
+        let abs_path = vault.resolve_safe_path("note.md").unwrap();
+        let result = vault.atomic_write(&abs_path, |_file| {
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "simulated failure"))
+        });
+
+        // Should fail
+        assert!(result.is_err());
+
+        // No .tmp files should remain
+        let entries: Vec<_> = fs::read_dir(_tmp.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .ends_with(".tmp")
+            })
+            .collect();
+        assert!(entries.is_empty(), "Temp files should be cleaned up after write failure");
+
+        // Original content should be preserved
+        let read = vault.read_file("note.md").unwrap();
+        assert_eq!(read.content, "original");
+    }
 }
