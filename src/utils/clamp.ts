@@ -1,4 +1,4 @@
-import { ZOOM_MIN, ZOOM_MAX } from "../constants/timeouts";
+import { ZOOM_MIN, ZOOM_MAX, AUTO_SAVE_MIN_MS, AUTO_SAVE_MAX_MS } from "../constants/timeouts";
 
 function clampValue(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) {
@@ -12,5 +12,5 @@ export function clampZoom(value: number): number {
 }
 
 export function clampAutoSaveInterval(value: number): number {
-  return clampValue(value, 500, 30000);
+  return clampValue(value, AUTO_SAVE_MIN_MS, AUTO_SAVE_MAX_MS);
 }

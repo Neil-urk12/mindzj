@@ -34,6 +34,7 @@ import {
 } from "../utils/aiHistory";
 import { encodeWav, arrayBufferToBase64 } from "../utils/audio";
 import { t } from "../i18n";
+import { copyToClipboard } from "../utils/clipboard";
 
 export function useAiPanel(deps: { vaultPath: Accessor<string | undefined> }) {
     // ── Signals ──────────────────────────────────────────────────
@@ -474,7 +475,7 @@ export function useAiPanel(deps: { vaultPath: Accessor<string | undefined> }) {
     }
 
     function copyAiHistoryQuestion(text: string) {
-        void navigator.clipboard?.writeText(text).catch(() => {});
+        void copyToClipboard(text);
     }
 
     // ── Return ───────────────────────────────────────────────────

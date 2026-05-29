@@ -18,6 +18,8 @@ import { StateField, Transaction } from "@codemirror/state";
 import katex from "katex";
 import { createHighlighter, type Highlighter } from "shiki";
 import { t } from "../../../i18n";
+import { copyToClipboard } from "../../../utils/clipboard";
+import { READING_FLASH_MS } from "../../../constants/timeouts";
 
 // ---------------------------------------------------------------------------
 // Shiki singleton (lazy-loaded)
@@ -142,11 +144,12 @@ class CodeBlockWidget extends WidgetType {
         copyBtn.className = "mz-block-code-copy";
         copyBtn.textContent = t("common.copy");
         copyBtn.addEventListener("click", () => {
-            navigator.clipboard.writeText(this.code).then(() => {
+            void copyToClipboard(this.code).then((ok) => {
+                if (!ok) return;
                 copyBtn.textContent = t("common.copyDone");
                 setTimeout(() => {
                     copyBtn.textContent = t("common.copy");
-                }, 1500);
+                }, READING_FLASH_MS);
             });
         });
         wrapper.appendChild(copyBtn);

@@ -166,8 +166,10 @@ export const WelcomeScreen: Component = () => {
       console.error("Failed to reveal vault in file manager:", error);
       // Last-resort fallback: copy the path so the user can paste it
       // into their own file manager.
-      await copyToClipboard(path);
-      window.alert(t("welcome.copiedPathNotice", { path }));
+      const copied = await copyToClipboard(path);
+      if (copied) {
+        window.alert(t("welcome.copiedPathNotice", { path }));
+      }
     }
   };
 
