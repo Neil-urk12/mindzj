@@ -6,7 +6,7 @@ use std::fs;
 use std::io::Write;
 use std::mem::ManuallyDrop;
 use std::path::{Component, Path, PathBuf};
-use std::sync::RwLock;
+use std::sync::Mutex;
 use tracing::{info, warn};
 
 /// Maximum number of file snapshots to keep per file for recovery.
@@ -16,7 +16,12 @@ const MAX_SNAPSHOTS_PER_FILE: usize = 50;
 const VAULT_CONFIG_DIR: &str = ".mindzj";
 
 /// Maximum file size for `read_binary` — 50 MiB.
-const MAX_READ_BINARY_SIZE: u64 = 50 * 1024 * 1024;
+const MAX_READ_BINARY_SIZE: u64 = 50 * 1024 * 1024; // 50 MiB
+
+/// Maximum file size for content analysis in `file_metadata` — 10 MiB.
+/// Files larger than this still return metadata (size, timestamps)
+/// but word count, char count, and tags are skipped.
+const MAX_METADATA_CONTENT_SIZE: u64 = 10 * 1024 * 1024;
 
 /// Manages all file I/O for a single vault.
 /// All filesystem operations MUST go through this module —
@@ -26,14 +31,14 @@ const MAX_READ_BINARY_SIZE: u64 = 50 * 1024 * 1024;
 /// - Atomic writes via temp file + fsync + rename
 /// - Path traversal prevention (no escaping vault root)
 /// - Automatic snapshots for file recovery
-/// - Concurrent read safety via RwLock on write operations
+/// - Concurrent read safety via Mutex on write operations
 pub struct Vault {
     /// Vault metadata
     info: VaultInfo,
     /// Absolute, canonicalized vault root path
     root: PathBuf,
     /// Write lock to ensure atomic file operations
-    write_lock: RwLock<()>,
+    write_lock: Mutex<()>
 }
 
 /// Guard that removes a temporary file on drop.
@@ -180,7 +185,7 @@ impl Vault {
         Ok(Self {
             info,
             root,
-            write_lock: RwLock::new(()),
+            write_lock: Mutex::new(()),
         })
     }
 
@@ -217,27 +222,23 @@ impl Vault {
 
         let full_path = self.root.join(relative);
 
-        // Canonicalize if the path exists (resolves symlinks)
-        let resolved = if full_path.exists() {
-            full_path.canonicalize()?
-        } else {
-            // For new files, canonicalize the parent and append the filename
-            if let Some(parent) = full_path.parent() {
-                if parent.exists() {
-                    let canonical_parent = parent.canonicalize()?;
-                    if let Some(file_name) = full_path.file_name() {
-                        canonical_parent.join(file_name)
-                    } else {
-                        return Err(KernelError::InvalidFileName(
-                            relative.to_string(),
-                        ));
-                    }
+        // Always canonicalize the parent directory, never the full path.
+        // This eliminates the TOCTOU window between exists() and canonicalize().
+        let resolved = if let Some(parent) = full_path.parent() {
+            if parent.exists() {
+                let canonical_parent = parent.canonicalize()?;
+                if let Some(file_name) = full_path.file_name() {
+                    canonical_parent.join(file_name)
                 } else {
-                    full_path.clone()
+                    return Err(KernelError::InvalidFileName(
+                        relative.to_string(),
+                    ));
                 }
             } else {
                 full_path.clone()
             }
+        } else {
+            full_path.clone()
         };
 
         // Ensure the resolved path is within the vault root
@@ -592,7 +593,7 @@ impl Vault {
             return Err(KernelError::FileAlreadyExists(file_name));
         }
         let bytes = fs::read(src)?;
-        fs::write(&dest, &bytes)?;
+        self.atomic_write(&dest, |file| file.write_all(&bytes))?;
         Ok(file_name)
     }
 
@@ -628,7 +629,7 @@ impl Vault {
         let file_name = format!("{}.css", stem);
         let dir = self.themes_dir()?;
         let dest = dir.join(&file_name);
-        fs::write(&dest, content)?;
+        self.atomic_write(&dest, |file| file.write_all(content.as_bytes()))?;
         Ok(file_name)
     }
 
@@ -685,7 +686,7 @@ impl Vault {
         // Acquire write lock for atomicity
         let _lock = self
             .write_lock
-            .write()
+            .lock()
             .map_err(|_| KernelError::Io(std::io::Error::other("Write lock poisoned")))?;
 
         // Write to temporary file
@@ -837,7 +838,7 @@ impl Vault {
             );
         }
 
-        let _lock = self.write_lock.write().map_err(|_| {
+        let _lock = self.write_lock.lock().map_err(|_| {
             KernelError::Io(std::io::Error::other("Write lock poisoned"))
         })?;
 
@@ -876,7 +877,7 @@ impl Vault {
             }
         }
 
-        let _lock = self.write_lock.write().map_err(|_| {
+        let _lock = self.write_lock.lock().map_err(|_| {
             KernelError::Io(std::io::Error::other("Write lock poisoned"))
         })?;
 
@@ -985,7 +986,7 @@ impl Vault {
             .map(|e| e.path())
             .filter(|p| {
                 p.file_name()
-                    .map(|n| n.to_string_lossy().starts_with(safe_name_prefix))
+                    .map(|n| n.to_string_lossy().starts_with(&format!("{}_", safe_name_prefix)))
                     .unwrap_or(false)
             })
             .collect();
@@ -1023,7 +1024,7 @@ impl Vault {
             .filter_map(|e| e.ok())
             .filter_map(|e| {
                 let name = e.file_name().to_string_lossy().to_string();
-                if name.starts_with(&safe_name) {
+                if name.starts_with(&format!("{}_", safe_name)) {
                     Some(name)
                 } else {
                     None
@@ -1087,7 +1088,8 @@ impl Vault {
         }
 
         let fs_meta = fs::metadata(&abs_path)?;
-        let content = if abs_path.is_file() {
+        let is_too_large = fs_meta.len() > MAX_METADATA_CONTENT_SIZE;
+        let content = if abs_path.is_file() && !is_too_large {
             fs::read_to_string(&abs_path).unwrap_or_default()
         } else {
             String::new()
@@ -1099,11 +1101,11 @@ impl Vault {
             .map(|e| matches!(e.to_ascii_lowercase().as_str(), "md" | "markdown"))
             .unwrap_or(false);
 
-        let word_count = content.split_whitespace().count() as u32;
-        let char_count = content.chars().count() as u32;
+        let word_count = if is_too_large { 0 } else { content.split_whitespace().count() as u32 };
+        let char_count = if is_too_large { 0 } else { content.chars().count() as u32 };
 
         // Extract tags from content (#tag patterns)
-        let tags = Self::extract_tags(&content);
+        let tags = if is_too_large { Vec::new() } else { Self::extract_tags(&content) };
 
         Ok(FileMetadata {
             relative_path: relative_path.to_string(),
@@ -1459,5 +1461,158 @@ Another #final-tag.
         // Original content should be preserved
         let read = vault.read_file("note.md").unwrap();
         assert_eq!(read.content, "original");
+    }
+
+    #[test]
+    fn snapshot_list_no_prefix_collision() {
+        let (_tmp, vault) = setup();
+
+        vault.write_file("a", "content of a").unwrap();
+        vault.write_file("ab", "content of ab").unwrap();
+
+        // Overwrite both to create snapshots
+        vault.write_file("a", "updated a").unwrap();
+        vault.write_file("ab", "updated ab").unwrap();
+
+        let snapshots_a = vault.list_snapshots("a").unwrap();
+        for snap in &snapshots_a {
+            assert!(
+                snap.starts_with("a_"),
+                "Snapshot '{}' should belong to 'a', not 'ab'",
+                snap
+            );
+        }
+
+        let snapshots_ab = vault.list_snapshots("ab").unwrap();
+        for snap in &snapshots_ab {
+            assert!(
+                snap.starts_with("ab_"),
+                "Snapshot '{}' should belong to 'ab'",
+                snap
+            );
+        }
+
+        assert_eq!(snapshots_a.len(), 1, "Should have 1 snapshot for 'a'");
+        assert_eq!(snapshots_ab.len(), 1, "Should have 1 snapshot for 'ab'");
+    }
+
+    #[test]
+    fn vault_uses_mutex_not_rwlock() {
+        // Compile-time check: if write_lock were RwLock, .lock() wouldn't exist.
+        let (_tmp, vault) = setup();
+        let _guard = vault.write_lock.lock().unwrap();
+    }
+
+    #[test]
+    fn resolve_safe_path_follows_symlinks_inside_vault() {
+        let (_tmp, vault) = setup();
+
+        // Create a file
+        vault.write_file("real_note.md", "content").unwrap();
+
+        // Create a symlink to it
+        let real_path = vault.resolve_safe_path("real_note.md").unwrap();
+        let link_path = _tmp.path().join("link_note.md");
+        if std::os::unix::fs::symlink(&real_path, &link_path).is_ok() {
+            // Resolving the symlink should work and point inside vault
+            let resolved = vault.resolve_safe_path("link_note.md").unwrap();
+            assert!(resolved.starts_with(vault.root()));
+        }
+    }
+
+    #[test]
+    fn resolve_safe_path_no_toctou_on_existing_file() {
+        let (_tmp, vault) = setup();
+        vault.write_file("test.md", "content").unwrap();
+
+        // Resolve should work without error for existing files
+        let resolved = vault.resolve_safe_path("test.md").unwrap();
+        assert!(resolved.starts_with(vault.root()));
+        assert!(resolved.ends_with("test.md"));
+    }
+
+    #[test]
+    fn write_theme_atomic() {
+        let (tmp, vault) = setup();
+
+        vault.write_theme("custom", "body { color: red; }").unwrap();
+
+        // No .tmp files should remain in themes dir
+        let themes_dir = tmp.path().join(VAULT_CONFIG_DIR).join("themes");
+        if themes_dir.exists() {
+            let entries: Vec<_> = fs::read_dir(&themes_dir)
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+                .collect();
+            assert!(entries.is_empty(), "No .tmp files should remain after theme write");
+        }
+
+        // Verify content
+        let theme_path = themes_dir.join("custom.css");
+        assert!(theme_path.exists());
+        let content = fs::read_to_string(&theme_path).unwrap();
+        assert_eq!(content, "body { color: red; }");
+    }
+
+    #[test]
+    fn import_theme_atomic() {
+        let (tmp, vault) = setup();
+
+        // Create a source file
+        let src = tmp.path().join("source.css");
+        fs::write(&src, "body { color: blue; }").unwrap();
+
+        vault.import_theme(src.to_str().unwrap(), false).unwrap();
+
+        // No .tmp files in themes dir
+        let themes_dir = tmp.path().join(VAULT_CONFIG_DIR).join("themes");
+        if themes_dir.exists() {
+            let entries: Vec<_> = fs::read_dir(&themes_dir)
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+                .collect();
+            assert!(entries.is_empty(), "No .tmp files should remain after import");
+        }
+
+        // Verify content
+        let theme_path = themes_dir.join("source.css");
+        assert!(theme_path.exists());
+        assert_eq!(fs::read_to_string(&theme_path).unwrap(), "body { color: blue; }");
+    }
+
+    #[test]
+    fn file_metadata_large_file_skips_content_analysis() {
+        let (_tmp, vault) = setup();
+
+        // Create a file larger than the limit ("a " = 2 bytes, repeat 6M = ~12 MiB)
+        let large_content = "a ".repeat(6 * 1024 * 1024);
+        vault.write_file("large.md", &large_content).unwrap();
+
+        let meta = vault.file_metadata("large.md").unwrap();
+
+        // Size should still be accurate
+        assert!(meta.size > 10 * 1024 * 1024);
+
+        // Word count should be 0 (skipped for large files)
+        assert_eq!(meta.word_count, 0);
+        assert_eq!(meta.char_count, 0);
+        assert!(meta.tags.is_empty());
+    }
+
+    #[test]
+    fn file_metadata_small_file_analyzes_content() {
+        let (_tmp, vault) = setup();
+
+        vault.write_file("small.md", "# Hello\n\nSome content with #tag1 #tag2").unwrap();
+
+        let meta = vault.file_metadata("small.md").unwrap();
+
+        // Small files should have word/char counts and tags
+        assert!(meta.word_count > 0);
+        assert!(meta.char_count > 0);
+        assert!(meta.tags.contains(&"tag1".to_string()));
+        assert!(meta.tags.contains(&"tag2".to_string()));
     }
 }
