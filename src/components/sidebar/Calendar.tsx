@@ -185,8 +185,11 @@ export const Calendar: Component = () => {
       const [yyyy, mm] = dateStr.split("-");
       // Best-effort directory creation. `create_dir` is idempotent on
       // existing dirs but errors get bubbled, so we swallow them.
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
       await invoke("create_dir", { relativePath: "diary" }).catch(() => {});
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
       await invoke("create_dir", { relativePath: `diary/${yyyy}` }).catch(() => {});
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
       await invoke("create_dir", { relativePath: `diary/${yyyy}/${mm}` }).catch(() => {});
       await vaultStore.createFile(path, "");
       await vaultStore.openFile(path);

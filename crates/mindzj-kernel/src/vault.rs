@@ -1157,8 +1157,8 @@ impl Vault {
             .map(|e| matches!(e.to_ascii_lowercase().as_str(), "md" | "markdown"))
             .unwrap_or(false);
 
-        let word_count = if is_too_large { 0 } else { content.split_whitespace().count() as u32 };
-        let char_count = if is_too_large { 0 } else { content.chars().count() as u32 };
+        let word_count = if is_too_large { 0 } else { content.split_whitespace().count().try_into().unwrap_or(u32::MAX) };
+        let char_count = if is_too_large { 0 } else { content.chars().count().try_into().unwrap_or(u32::MAX) };
 
         // Extract tags from content (#tag patterns)
         let tags = if is_too_large { Vec::new() } else { Self::extract_tags(&content) };

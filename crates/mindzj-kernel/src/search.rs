@@ -66,7 +66,7 @@ impl SearchIndex {
                 let line = content[..absolute_pos]
                     .chars()
                     .filter(|c| *c == '\n')
-                    .count() as u32;
+                    .count().try_into().unwrap_or(u32::MAX);
 
                 // Extract snippet with context (up to 80 chars before and after)
                 let snippet_start = content[..absolute_pos]
@@ -80,8 +80,8 @@ impl SearchIndex {
                     .unwrap_or(content.len());
 
                 let snippet_text = content[snippet_start..snippet_end].to_string();
-                let highlight_start = (absolute_pos - snippet_start) as u32;
-                let highlight_end = highlight_start + search_text.len() as u32;
+                let highlight_start: u32 = (absolute_pos - snippet_start).try_into().unwrap_or(u32::MAX);
+                let highlight_end = highlight_start.saturating_add(search_text.len().try_into().unwrap_or(u32::MAX));
 
                 snippets.push(SearchSnippet {
                     text: snippet_text,

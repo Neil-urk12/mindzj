@@ -269,18 +269,7 @@ pub async fn ai_chat_completion(request: AiChatCompletionRequest) -> Result<Valu
     })?;
 
     if !status.is_success() {
-        return Err(CommandError {
-            code: "AI_PROVIDER_ERROR".into(),
-            message: format!(
-                "{}{}",
-                status.as_u16(),
-                if text.is_empty() {
-                    String::new()
-                } else {
-                    format!(": {}", text)
-                }
-            ),
-        });
+        return Err(ai_provider_status_error(status, text));
     }
 
     serde_json::from_str(&text).map_err(|e| CommandError {
@@ -312,18 +301,7 @@ pub async fn ai_get_json(request: AiGetJsonRequest) -> Result<Value, CommandErro
     })?;
 
     if !status.is_success() {
-        return Err(CommandError {
-            code: "AI_PROVIDER_ERROR".into(),
-            message: format!(
-                "{}{}",
-                status.as_u16(),
-                if text.is_empty() {
-                    String::new()
-                } else {
-                    format!(": {}", text)
-                }
-            ),
-        });
+        return Err(ai_provider_status_error(status, text));
     }
 
     serde_json::from_str(&text).map_err(|e| CommandError {

@@ -15,6 +15,8 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { vaultStore, type FileContent } from "./stores/vault";
 import { editorStore, type ViewMode } from "./stores/editor";
+import { isViewMode, resolveDefaultViewMode, isSplitDirection, isPaneSlot, normalizeSplitRatio } from "./utils/paneUtils";
+import { SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH, MAX_CLOSED_TAB_HISTORY, DRAG_SPACER_WIDTH, SETTINGS_NAV_DELAY_MS } from "./constants/timeouts";
 import { settingsStore } from "./stores/settings";
 import { loadWorkspace, saveWorkspace, scheduleSave, type WorkspaceState } from "./stores/workspace";
 import {
@@ -116,7 +118,7 @@ const App: Component = () => {
     const [showVaultMenu, setShowVaultMenu] = createSignal(false);
     const [sortMode, setSortMode] = createSignal<SortMode>("custom");
     const [sortOrder, setSortOrder] = createSignal<SortOrder>("asc");
-    const [sidebarWidth, setSidebarWidth] = createSignal(260);
+    const [sidebarWidth, setSidebarWidth] = createSignal(SIDEBAR_DEFAULT_WIDTH);
     const [primaryPanePath, setPrimaryPanePath] = createSignal<string | null>(
         null,
     );
@@ -176,7 +178,6 @@ const App: Component = () => {
     // The stack is bounded so a user who closes thousands of tabs in
     // a long session doesn't accumulate unbounded state. The most
     // recent entry is at the END of the array (LIFO push/pop).
-    const MAX_CLOSED_HISTORY = 50;
     const [closedTabsHistory, setClosedTabsHistory] = createSignal<string[]>(
         [],
     );
@@ -190,8 +191,8 @@ const App: Component = () => {
             const deduped = prev.filter((p) => p !== path);
             const next = [...deduped, path];
             // Cap from the OLD end (drop oldest entries first).
-            return next.length > MAX_CLOSED_HISTORY
-                ? next.slice(next.length - MAX_CLOSED_HISTORY)
+            return next.length > MAX_CLOSED_TAB_HISTORY
+                ? next.slice(next.length - MAX_CLOSED_TAB_HISTORY)
                 : next;
         });
     }
@@ -242,30 +243,6 @@ const App: Component = () => {
 
     // Screenshot signals — moved to useScreenshot hook
 
-    function isViewMode(value: string | null): value is ViewMode {
-        return (
-            value === "source" ||
-            value === "live-preview" ||
-            value === "reading"
-        );
-    }
-
-    function resolveDefaultViewMode(
-        value: string | null | undefined,
-    ): ViewMode {
-        switch (value) {
-            case "Source":
-            case "source":
-                return "source";
-            case "Reading":
-            case "reading":
-                return "reading";
-            case "LivePreview":
-            case "live-preview":
-            default:
-                return "live-preview";
-        }
-    }
 
     function buildDefaultSidebarTabs(): {
         id: SidebarTab;
@@ -353,24 +330,6 @@ const App: Component = () => {
         });
     }
 
-    function isSplitDirection(value: unknown): value is SplitDirection {
-        return (
-            value === "left" ||
-            value === "right" ||
-            value === "up" ||
-            value === "down"
-        );
-    }
-
-    function isPaneSlot(value: unknown): value is PaneSlot {
-        return value === "primary" || value === "secondary";
-    }
-
-    function normalizeSplitRatio(value: unknown): number {
-        return typeof value === "number" && Number.isFinite(value)
-            ? Math.max(0.2, Math.min(0.8, value))
-            : 0.5;
-    }
 
     function findOpenFile(path: string | null | undefined): FileContent | null {
         if (!path) return null;
@@ -1066,11 +1025,14 @@ const App: Component = () => {
         );
 
         onCleanup(() => {
-            unregister("CommandOrControl+Alt+Left").catch(() => {});
-            unregister("CommandOrControl+Alt+Right").catch(() => {});
+            // eslint-disable-next-line @typescript-eslint/no-empty-function
+            unregister("CommandOrControl+Alt+Left").catch(() => {}); // cleanup, safe to ignore
+            // eslint-disable-next-line @typescript-eslint/no-empty-function
+            unregister("CommandOrControl+Alt+Right").catch(() => {}); // cleanup, safe to ignore
             try {
                 unlistenTabSwitch();
-            } catch {}
+            // eslint-disable-next-line no-empty
+            } catch {} // cleanup, safe to ignore
         });
     });
 
@@ -1863,9 +1825,9 @@ const App: Component = () => {
                                     const startW = sidebarWidth();
                                     const onMove = (me: MouseEvent) => {
                                         const newW = Math.max(
-                                            160,
+                                            SIDEBAR_MIN_WIDTH,
                                             Math.min(
-                                                600,
+                                                SIDEBAR_MAX_WIDTH,
                                                 startW + me.clientX - startX,
                                             ),
                                         );
@@ -2082,7 +2044,7 @@ const App: Component = () => {
                                     data-tauri-drag-region
                                     style={{
                                         "flex-shrink": "0",
-                                        width: "40px",
+                                        width: `${DRAG_SPACER_WIDTH}px`,
                                         height: "var(--mz-tab-height)",
                                         "border-left":
                                             "1px solid var(--mz-border)",

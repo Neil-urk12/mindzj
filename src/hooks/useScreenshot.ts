@@ -146,7 +146,8 @@ export function useScreenshot(_deps: {
             const combo = lastCombo;
             if (combo) {
                 pending = pending.then(() =>
-                    unregister(combo).catch(() => {}),
+                    // eslint-disable-next-line @typescript-eslint/no-empty-function
+                    unregister(combo).catch(() => {}), // cleanup, safe to ignore
                 );
                 lastCombo = null;
             }

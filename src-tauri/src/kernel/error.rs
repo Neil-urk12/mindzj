@@ -60,8 +60,54 @@ impl From<std::io::Error> for CommandError {
     }
 }
 
+impl From<String> for CommandError {
+    fn from(err: String) -> Self {
+        CommandError {
+            code: "INVALID_INPUT".into(),
+            message: err,
+        }
+    }
+}
+
+impl From<&str> for CommandError {
+    fn from(err: &str) -> Self {
+        CommandError {
+            code: "INVALID_INPUT".into(),
+            message: err.to_string(),
+        }
+    }
+}
+
 impl std::fmt::Display for CommandError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[{}] {}", self.code, self.message)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_error_from_string() {
+        let err: CommandError = "something went wrong".to_string().into();
+        assert_eq!(err.code, "INVALID_INPUT");
+        assert_eq!(err.message, "something went wrong");
+    }
+
+    #[test]
+    fn command_error_from_str() {
+        let err: CommandError = "something went wrong".into();
+        assert_eq!(err.code, "INVALID_INPUT");
+        assert_eq!(err.message, "something went wrong");
+    }
+
+    #[test]
+    fn command_error_display() {
+        let err = CommandError {
+            code: "TEST_CODE".into(),
+            message: "test message".into(),
+        };
+        assert_eq!(err.to_string(), "[TEST_CODE] test message");
     }
 }

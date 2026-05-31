@@ -43,3 +43,17 @@ export const SKIN_PREVIEW_DELAY_MS = 2400;
 
 // ── Search panel ──
 export const SEARCH_INPUT_DEBOUNCE_MS = 150;
+
+// ── Sidebar layout (App.tsx) ──
+export const SIDEBAR_DEFAULT_WIDTH = 260;
+export const SIDEBAR_MIN_WIDTH = 160;
+export const SIDEBAR_MAX_WIDTH = 600;
+
+// ── Tab history (App.tsx) ──
+export const MAX_CLOSED_TAB_HISTORY = 50;
+
+// ── Drag spacer (App.tsx) ──
+export const DRAG_SPACER_WIDTH = 40;
+
+// ── Settings navigation delay (App.tsx) ──
+export const SETTINGS_NAV_DELAY_MS = 100;

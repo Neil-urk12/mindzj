@@ -85,7 +85,7 @@ impl LinkIndex {
     pub fn backlink_count(&self, target_path: &str) -> u32 {
         self.backward
             .get(target_path)
-            .map(|v| v.len() as u32)
+            .map(|v| v.len().try_into().unwrap_or(u32::MAX))
             .unwrap_or(0)
     }
 
@@ -171,13 +171,13 @@ impl LinkIndex {
             }
 
             // Parse wiki links: [[target]] or [[target|display]]
-            Self::parse_wiki_links(source_path, line, line_idx as u32, &mut links);
+            Self::parse_wiki_links(source_path, line, line_idx.try_into().unwrap_or(u32::MAX), &mut links);
 
             // Parse markdown links: [display](target.md)
-            Self::parse_markdown_links(source_path, line, line_idx as u32, &mut links);
+            Self::parse_markdown_links(source_path, line, line_idx.try_into().unwrap_or(u32::MAX), &mut links);
 
             // Parse embeds: ![[target]]
-            Self::parse_embeds(source_path, line, line_idx as u32, &mut links);
+            Self::parse_embeds(source_path, line, line_idx.try_into().unwrap_or(u32::MAX), &mut links);
         }
 
         links
@@ -225,7 +225,7 @@ impl LinkIndex {
                             display_text: display,
                             link_type: LinkType::WikiLink,
                             line: line_num,
-                            column: i as u32,
+                            column: i.try_into().unwrap_or(u32::MAX),
                         });
                     }
 
@@ -285,7 +285,7 @@ impl LinkIndex {
                                     },
                                     link_type: LinkType::MarkdownLink,
                                     line: line_num,
-                                    column: i as u32,
+                                    column: i.try_into().unwrap_or(u32::MAX),
                                 });
                             }
 
@@ -328,7 +328,7 @@ impl LinkIndex {
                             display_text: None,
                             link_type: LinkType::Embed,
                             line: line_num,
-                            column: i as u32,
+                            column: i.try_into().unwrap_or(u32::MAX),
                         });
                     }
 

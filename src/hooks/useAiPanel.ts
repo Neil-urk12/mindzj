@@ -241,7 +241,8 @@ export function useAiPanel(deps: { vaultPath: Accessor<string | undefined> }) {
         aiVoiceProcessor?.disconnect();
         aiVoiceSource?.disconnect();
         aiVoiceStream?.getTracks().forEach((track) => track.stop());
-        void aiVoiceAudioContext?.close().catch(() => {});
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
+        void aiVoiceAudioContext?.close().catch(() => {}); // cleanup, safe to ignore
         aiVoiceProcessor = null;
         aiVoiceSource = null;
         aiVoiceStream = null;

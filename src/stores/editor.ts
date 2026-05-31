@@ -239,7 +239,8 @@ function createEditorStore() {
     // Load referenced anchors in the background (non-blocking)
     collectReferencedAnchors(path)
       .then((a) => _fileAnchors.set(path, a))
-      .catch(() => {});
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      .catch(() => {}); // non-blocking background operation
   }
 
   /** Compare headings & anchors after save and update backlinks. */
@@ -267,7 +268,8 @@ function createEditorStore() {
       if (renamedAnchors.length > 0) {
         collectReferencedAnchors(path)
           .then((a) => _fileAnchors.set(path, a))
-          .catch(() => {});
+          // eslint-disable-next-line @typescript-eslint/no-empty-function
+          .catch(() => {}); // non-blocking background operation
       }
     }
     _fileContent.set(path, content);

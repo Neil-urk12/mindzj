@@ -30,11 +30,11 @@
             "assetProtocol": {
                 "enable": true,
                 "scope": {
-                    "allow": ["**", "**/.mindzj/**"],
-                    "requireLiteralLeadingDot": false
+                    "allow": ["$APPDATA/**", "$HOME/.mindzj/**", "$DOCUMENT/**", "$DESKTOP/**", "$DOWNLOAD/**"],
+                    "requireLiteralLeadingDot": true
                 }
             },
-            "csp": null
+            "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.mistral.ai https://api.groq.com https://api.deepseek.com https://api.minimax.chat wss://api.openai.com; object-src 'none'; base-uri 'self'; form-action 'self'"
         }
     },
     "bundle": {

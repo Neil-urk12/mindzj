@@ -375,7 +375,7 @@ async fn export_current_webview_to_pdf(
 ///
 /// ...which is harmless but ugly in the PowerShell output.
 #[tauri::command]
-fn close_or_exit(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+fn close_or_exit(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), CommandError> {
     let windows = app.webview_windows();
     let count = windows.len();
     tracing::info!(
@@ -416,7 +416,7 @@ async fn open_vault_window(
     state: tauri::State<'_, AppState>,
     vault_path: String,
     vault_name: String,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     use tauri::WebviewWindowBuilder;
 
     // Canonicalize the requested vault path for reliable comparison
@@ -528,7 +528,7 @@ async fn open_file_in_split_window(
     file_path: String,
     view_mode: Option<String>,
     direction: String,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     use tauri::{LogicalPosition, LogicalSize, WebviewWindowBuilder};
 
     // --- Compute new geometry based on the direction -----------------
@@ -569,7 +569,7 @@ async fn open_file_in_split_window(
             "right" => (mx + mw / 2.0, my, mw / 2.0, mh, None),
             "up" => (mx, my, mw, mh / 2.0, None),
             "down" => (mx, my + mh / 2.0, mw, mh / 2.0, None),
-            _ => return Err(format!("invalid direction: {}", direction)),
+            _ => return Err(format!("invalid direction: {}", direction).into()),
         }
     } else {
         match direction.as_str() {
@@ -601,7 +601,7 @@ async fn open_file_in_split_window(
                 ch / 2.0,
                 Some((cx, cy, cw, ch / 2.0)),
             ),
-            _ => return Err(format!("invalid direction: {}", direction)),
+            _ => return Err(format!("invalid direction: {}", direction).into()),
         }
     };
 
@@ -678,7 +678,7 @@ async fn open_image_in_new_window(
     vault_path: String,
     vault_name: String,
     file_path: String,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     use tauri::WebviewWindowBuilder;
 
     let url_path = format!(

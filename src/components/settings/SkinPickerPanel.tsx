@@ -68,9 +68,9 @@ export const SkinPickerPanel: Component = () => {
         try {
             const names = await invoke<string[]>("list_themes");
             setCustomThemes(names);
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error("[skin] list_themes failed:", e);
-            setError(String(e?.message ?? e));
+            setError(String(e instanceof Error ? e.message : String(e)));
         } finally {
             setLoading(false);
         }
@@ -103,9 +103,9 @@ export const SkinPickerPanel: Component = () => {
             const stem = fileName.replace(/\.css$/i, "");
             await refresh();
             applySkin(`${CUSTOM_SKIN_PREFIX}${stem}`);
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error("[skin] import_theme failed:", e);
-            setError(String(e?.message ?? e));
+            setError(String(e instanceof Error ? e.message : String(e)));
         } finally {
             setBusy(false);
         }
@@ -129,9 +129,9 @@ export const SkinPickerPanel: Component = () => {
             await refresh();
             const bare = fileName.replace(/\.css$/i, "");
             applySkin(`${CUSTOM_SKIN_PREFIX}${bare}`);
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error("[skin] write_theme failed:", e);
-            setError(String(e?.message ?? e));
+            setError(String(e instanceof Error ? e.message : String(e)));
         } finally {
             setBusy(false);
         }
@@ -149,9 +149,9 @@ export const SkinPickerPanel: Component = () => {
             // strips that prefix before spawning `explorer.exe`, so going
             // through it is the robust cross-platform path.
             await invoke("open_path_in_file_manager", { absolutePath: dir });
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error("[skin] openFolder failed:", e);
-            setError(String(e?.message ?? e));
+            setError(String(e instanceof Error ? e.message : String(e)));
         }
     }
 
@@ -169,9 +169,9 @@ export const SkinPickerPanel: Component = () => {
                 applySkin("dark");
             }
             await refresh();
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error("[skin] delete_theme failed:", e);
-            setError(String(e?.message ?? e));
+            setError(String(e instanceof Error ? e.message : String(e)));
         } finally {
             setBusy(false);
         }
@@ -189,9 +189,9 @@ export const SkinPickerPanel: Component = () => {
             await refresh();
             await settingsStore.reloadCustomSkin();
             setNotice(t("settings.skinReloadDone"));
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error("[skin] reload failed:", e);
-            setError(String(e?.message ?? e));
+            setError(String(e instanceof Error ? e.message : String(e)));
         } finally {
             setBusy(false);
         }
