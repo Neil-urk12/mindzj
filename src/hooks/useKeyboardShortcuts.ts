@@ -21,6 +21,7 @@ import {
 } from "../components/sidebar/SearchPanel";
 import { type PaneSlot } from "../types/app";
 import type { UseAiPanelReturn } from "./useAiPanel";
+import { normalizeHotkeyKey, isCtrlHeld, matchesHotkey, isArrowKeyEvent, getTabSwitchDirectionFromEvent } from "./keyboardUtils";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -71,97 +72,6 @@ export interface UseKeyboardShortcutsOptions {
 // `needCtrl !== (e.ctrlKey || e.metaKey)`) caused Win+F to
 // accidentally trigger our Ctrl+F handlers AND prevented
 // Windows' own Win+F (Feedback Hub) from firing properly.
-const _isMacPlatform = /mac|iphone|ipod|ipad/i.test(
-    typeof navigator !== "undefined" ? navigator.platform : "",
-);
-
-// ── Module-level pure utility functions ───────────────────────────
-
-function normalizeHotkeyKey(key: string): string {
-    const normalized = key.length === 1 ? key.toUpperCase() : key;
-    if (normalized === "+" || normalized === "ADD" || normalized === "Plus")
-        return "=";
-    if (normalized === "SUBTRACT" || normalized === "Minus") return "-";
-    // Normalise arrow keys so hotkey strings like "Ctrl+Alt+Left"
-    // actually match DOM events whose `e.key` is `"ArrowLeft"`.
-    // The HotkeysPanel capture UI already uses the short form
-    // (Up / Down / Left / Right / Space) when saving overrides,
-    // so we must match that when comparing.
-    if (normalized === "ArrowLeft") return "Left";
-    if (normalized === "ArrowRight") return "Right";
-    if (normalized === "ArrowUp") return "Up";
-    if (normalized === "ArrowDown") return "Down";
-    if (normalized === " ") return "Space";
-    return normalized;
-}
-
-/** Returns true when the primary "Ctrl-like" modifier is held.
- *  On Mac that's Cmd (metaKey); on Windows/Linux it's strictly
- *  Ctrl, NEVER the Win key. */
-function isCtrlHeld(e: KeyboardEvent): boolean {
-    if (_isMacPlatform) return e.ctrlKey || e.metaKey;
-    // Windows/Linux: require Ctrl AND require metaKey to NOT be
-    // down — otherwise Win+X would flow through as if it were
-    // Ctrl+X, breaking Windows-reserved combos like Win+F /
-    // Win+S / Win+R.
-    return e.ctrlKey && !e.metaKey;
-}
-
-/**
- * Match a KeyboardEvent against a hotkey combo string like "Alt+G", "Ctrl+Shift+S".
- * Returns true if the event matches the combo.
- */
-function matchesHotkey(e: KeyboardEvent, combo: string): boolean {
-    const parts = combo.split("+");
-    const keyPart = parts[parts.length - 1];
-    const needCtrl = parts.includes("Ctrl");
-    const needShift = parts.includes("Shift");
-    const needAlt = parts.includes("Alt");
-    const needMeta = parts.includes("Meta");
-
-    // On Mac, the Ctrl slot is satisfied by Cmd (metaKey). On
-    // Windows/Linux it's strictly the real Ctrl key — holding
-    // the Win key alone must NOT count as Ctrl.
-    const ctrlHeld = _isMacPlatform ? e.ctrlKey || e.metaKey : e.ctrlKey;
-    if (needCtrl !== ctrlHeld) return false;
-    if (needShift !== e.shiftKey) return false;
-    if (needAlt !== e.altKey) return false;
-    // Windows: if metaKey is down and we DIDN'T ask for it in
-    // the combo, bail out. This is the other half of the
-    // Win+F fix: it stops e.g. Win+S from firing our Ctrl+S
-    // save handler (because needCtrl=true but ctrlHeld=false,
-    // we'd return early anyway — but this guards cases like
-    // "just F" hotkeys where the user has Win held down as
-    // they start typing something).
-    if (!_isMacPlatform && !needMeta && e.metaKey) return false;
-    if (needMeta && !e.metaKey) return false;
-
-    const eventKey = normalizeHotkeyKey(e.key);
-    const comboKey = normalizeHotkeyKey(keyPart);
-    return eventKey === comboKey;
-}
-
-function isArrowKeyEvent(e: KeyboardEvent): boolean {
-    const keyCode = e.keyCode || e.which;
-    return (
-        e.code === "ArrowUp" ||
-        e.code === "ArrowDown" ||
-        e.code === "ArrowLeft" ||
-        e.code === "ArrowRight" ||
-        e.key === "ArrowUp" ||
-        e.key === "ArrowDown" ||
-        e.key === "ArrowLeft" ||
-        e.key === "ArrowRight" ||
-        e.key === "Up" ||
-        e.key === "Down" ||
-        e.key === "Left" ||
-        e.key === "Right" ||
-        keyCode === 38 ||
-        keyCode === 40 ||
-        keyCode === 37 ||
-        keyCode === 39
-    );
-}
 
 function suppressWebViewAltMenu(e: KeyboardEvent): boolean {
     if (e.key === "Alt") {
@@ -184,8 +94,6 @@ function suppressWebViewAltMenu(e: KeyboardEvent): boolean {
             e.key === "ArrowRight" ||
             e.key === "Left" ||
             e.key === "Right" ||
-            (e.keyCode || e.which) === 37 ||
-            (e.keyCode || e.which) === 39;
         if (
             isHorizontalArrow &&
             document.activeElement?.closest(".cm-editor")
@@ -228,28 +136,6 @@ function clearEditorSearchQuery(view: EditorView) {
     });
 }
 
-function getTabSwitchDirectionFromEvent(
-    e: KeyboardEvent,
-): "prev" | "next" | null {
-    const keyCode = e.keyCode || e.which;
-    const isLeft =
-        e.code === "ArrowLeft" ||
-        e.key === "ArrowLeft" ||
-        e.key === "Left" ||
-        keyCode === 37;
-    const isRight =
-        e.code === "ArrowRight" ||
-        e.key === "ArrowRight" ||
-        e.key === "Right" ||
-        keyCode === 39;
-    const isTabSwitchHotkey =
-        isCtrlHeld(e) &&
-        (isLeft || isRight) &&
-        ((e.shiftKey && !e.altKey) || (e.altKey && !e.shiftKey));
-
-    if (!isTabSwitchHotkey) return null;
-    return isLeft ? "prev" : "next";
-}
 
 // ── Module-level state ────────────────────────────────────────────
 

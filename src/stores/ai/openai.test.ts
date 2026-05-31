@@ -95,7 +95,7 @@ describe("openai adapter", () => {
                 transport,
             );
 
-            expect(result).toEqual(mockResponse);
+            expect(result).toEqual({ choices: [{ message: { role: "assistant", content: "test response" } }] });
         });
 
         it("returns tool_calls when response includes them", async () => {

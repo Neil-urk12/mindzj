@@ -26,6 +26,66 @@ export interface ToolDefinition {
   };
 }
 
+// ── Provider-specific raw response types ──────────────────────────
+
+/** Anthropic API response content part */
+export interface AnthropicTextPart {
+  type: "text";
+  text: string;
+}
+
+export interface AnthropicToolUsePart {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export type AnthropicContentPart = AnthropicTextPart | AnthropicToolUsePart;
+
+/** Raw Anthropic Messages API response */
+export interface AnthropicResponse {
+  content: AnthropicContentPart[];
+  stop_reason?: string;
+  model?: string;
+}
+
+/** Gemini API response content part */
+export interface GeminiTextPart {
+  text: string;
+}
+
+export interface GeminiFunctionCallPart {
+  functionCall: {
+    name: string;
+    args?: Record<string, unknown>;
+  };
+}
+
+export type GeminiContentPart = GeminiTextPart | GeminiFunctionCallPart;
+
+/** Raw Gemini generateContent API response */
+export interface GeminiResponse {
+  candidates?: Array<{
+    content?: {
+      parts: GeminiContentPart[];
+    };
+    finishReason?: string;
+  }>;
+}
+
+/** Raw OpenAI Chat Completions API response */
+export interface OpenAIResponse {
+  choices: Array<{
+    message: {
+      role: string;
+      content: string | null;
+      tool_calls?: ToolCall[];
+    };
+    finish_reason?: string;
+  }>;
+}
+
 /** Normalized response — all adapters return this shape */
 export interface NormalizedResponse {
   choices: Array<{
@@ -65,7 +125,7 @@ export interface ChatCompletionAdapter {
 export type ProviderFamily = "openai-compatible" | "anthropic" | "gemini";
 
 /** Parse JSON from LLM output, tolerating markdown fences and surrounding text */
-export function parseJsonObject(value: string): any | null {
+export function parseJsonObject(value: string): unknown | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();

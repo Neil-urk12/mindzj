@@ -2,6 +2,7 @@
 // Types
 // ---------------------------------------------------------------------------
 
+import type { PluginEditorApi, PluginMarkdownView } from "../types/global";
 interface PluginCommand {
     id: string;
     name: string;
@@ -34,13 +35,13 @@ export { pluginCommandRegistry };
 // Editor compat helpers
 // ---------------------------------------------------------------------------
 
-function getCurrentEditorCompat(): any | null {
-    return (window as any).__mindzj_plugin_editor_api ?? null;
+function getCurrentEditorCompat(): PluginEditorApi | null {
+    return window.__mindzj_plugin_editor_api ?? null;
 }
 export { getCurrentEditorCompat };
 
-function getCurrentMarkdownViewCompat(): any | null {
-    return (window as any).__mindzj_markdown_view ?? null;
+function getCurrentMarkdownViewCompat(): PluginMarkdownView | null {
+    return window.__mindzj_markdown_view ?? null;
 }
 export { getCurrentMarkdownViewCompat };
 

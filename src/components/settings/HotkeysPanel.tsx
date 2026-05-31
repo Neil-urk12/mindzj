@@ -245,7 +245,7 @@ export const HotkeysPanel: Component = () => {
 
     // Sync global flag so App.tsx's handleGlobalKeydown skips shortcuts while capturing
     createEffect(() => {
-        (window as any).__mindzj_hotkey_capturing = !!capturing();
+        window.__mindzj_hotkey_capturing = !!capturing();
     });
 
     function handleKeyCapture(e: KeyboardEvent) {

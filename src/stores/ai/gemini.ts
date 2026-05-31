@@ -1,7 +1,7 @@
-import type { ChatCompletionAdapter, ChatMessage, ToolDefinition, AdapterConfig, AiTransport, NormalizedResponse } from "./types";
+import type { ChatCompletionAdapter, ChatMessage, ToolDefinition, AdapterConfig, AiTransport, NormalizedResponse, GeminiContentPart } from "./types";
 import { parseJsonObject } from "./types";
 
-function toGeminiSchema(value: any): any {
+function toGeminiSchema(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(toGeminiSchema);
   if (!value || typeof value !== "object") return value;
   const result: Record<string, unknown> = {};
@@ -26,7 +26,7 @@ function geminiToolDefinitions(tools: ToolDefinition[]) {
 
 function geminiMessages(messages: ChatMessage[]) {
   const systemParts: Array<{ text: string }> = [];
-  const contents: any[] = [];
+  const contents: Array<{ role: string; parts: Array<{ text: string } | { functionCall: { name: string; args: Record<string, unknown> } } | { functionResponse: { name: string; response: unknown } }> }> = [];
   const toolNames = new Map<string, string>();
 
   for (const message of messages) {
@@ -39,7 +39,7 @@ function geminiMessages(messages: ChatMessage[]) {
       continue;
     }
     if (message.role === "assistant") {
-      const parts: any[] = [];
+      const parts: Array<{ text: string } | { functionCall: { name: string; args: Record<string, unknown> } }> = [];
       if (message.content) parts.push({ text: message.content });
       for (const call of message.tool_calls ?? []) {
         toolNames.set(call.id, call.function.name);
@@ -74,16 +74,23 @@ function geminiMessages(messages: ChatMessage[]) {
   };
 }
 
-function normalizeGeminiResponse(data: any): NormalizedResponse {
-  const parts = data?.candidates?.[0]?.content?.parts ?? [];
+export function normalizeGeminiResponse(data: unknown): NormalizedResponse {
+  const resp = (typeof data === "object" && data !== null ? data : null) as Record<string, unknown> | null;
+  const rawCandidates = resp?.candidates;
+  const candidates = Array.isArray(rawCandidates) ? rawCandidates as Array<Record<string, unknown>> : [];
+  const first = candidates[0];
+  const firstContent = first && typeof first.content === "object" && first.content !== null ? first.content as Record<string, unknown> : null;
+  const parts: GeminiContentPart[] = Array.isArray(firstContent?.parts) ? firstContent.parts as GeminiContentPart[] : [];
   const text = parts
-    .filter((part: any) => typeof part?.text === "string")
-    .map((part: any) => part.text)
+    .filter((part): part is { text: string } => typeof part?.text === "string")
+    .map((part) => part.text)
     .join("\n")
     .trim();
   const toolCalls = parts
-    .filter((part: any) => part?.functionCall?.name)
-    .map((part: any, index: number) => ({
+    .filter((part): part is { functionCall: { name: string; args?: Record<string, unknown> } } =>
+      "functionCall" in part && !!part.functionCall?.name
+    )
+    .map((part, index) => ({
       id: `gemini-tool-${index}`,
       type: "function" as const,
       function: {

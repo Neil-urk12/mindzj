@@ -1,4 +1,4 @@
-import type { ChatCompletionAdapter, ChatMessage, ToolDefinition, AdapterConfig, AiTransport, NormalizedResponse } from "./types";
+import type { ChatCompletionAdapter, ChatMessage, ToolDefinition, AdapterConfig, AiTransport, NormalizedResponse, AnthropicContentPart } from "./types";
 import { parseJsonObject } from "./types";
 import { AI_MAX_TOKENS } from "../../constants/timeouts";
 
@@ -12,8 +12,8 @@ function anthropicToolDefinitions(tools: ToolDefinition[]) {
 
 function anthropicMessages(messages: ChatMessage[]) {
   const system: string[] = [];
-  const result: any[] = [];
-  let pendingToolResults: any[] = [];
+  const result: Array<{ role: string; content: string | AnthropicContentPart[] }> = [];
+  let pendingToolResults: Array<{ type: string; tool_use_id: string; content: string; is_error?: boolean }> = [];
 
   const flushToolResults = () => {
     if (!pendingToolResults.length) return;
@@ -33,7 +33,7 @@ function anthropicMessages(messages: ChatMessage[]) {
     }
     if (message.role === "assistant") {
       flushToolResults();
-      const content: any[] = [];
+      const content: AnthropicContentPart[] = [];
       if (message.content) content.push({ type: "text", text: message.content });
       for (const call of message.tool_calls ?? []) {
         content.push({
@@ -61,16 +61,20 @@ function anthropicMessages(messages: ChatMessage[]) {
   return { system: system.join("\n\n"), messages: result };
 }
 
-function normalizeAnthropicResponse(data: any): NormalizedResponse {
-  const parts = Array.isArray(data?.content) ? data.content : [];
+export function normalizeAnthropicResponse(data: unknown): NormalizedResponse {
+  const resp = (typeof data === "object" && data !== null ? data : null) as Record<string, unknown> | null;
+  const rawParts = resp?.content;
+  const parts: AnthropicContentPart[] = Array.isArray(rawParts) ? rawParts as AnthropicContentPart[] : [];
   const text = parts
-    .filter((part: any) => part?.type === "text" && typeof part.text === "string")
-    .map((part: any) => part.text)
+    .filter((part): part is { type: "text"; text: string } => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
     .join("\n")
     .trim();
   const toolCalls = parts
-    .filter((part: any) => part?.type === "tool_use" && part.name)
-    .map((part: any, index: number) => ({
+    .filter((part): part is { type: "tool_use"; id: string; name: string; input: Record<string, unknown> } =>
+      part.type === "tool_use" && "name" in part && !!part.name
+    )
+    .map((part, index) => ({
       id: String(part.id ?? `anthropic-tool-${index}`),
       type: "function" as const,
       function: {

@@ -50,7 +50,7 @@ export const WindowControls: Component = () => {
             console.warn("[WindowControls] flushAllPendingSaves failed:", e);
         }
         try {
-            await (window as any).__mindzj_flush_workspace?.();
+            await window.__mindzj_flush_workspace?.();
         } catch (e) {
             console.warn("[WindowControls] workspace flush failed:", e);
         }
