@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
     normalizeHotkeyKey,
     isCtrlHeld,
     matchesHotkey,
     isArrowKeyEvent,
     getTabSwitchDirectionFromEvent,
+    __setMacPlatformForTesting,
 } from "./keyboardUtils";
 
 function makeEvent(key: string, init: Partial<KeyboardEventInit> = {}): KeyboardEvent {
@@ -48,6 +49,7 @@ describe("normalizeHotkeyKey", () => {
 });
 
 describe("isCtrlHeld", () => {
+    beforeEach(() => __setMacPlatformForTesting(null));
     it("returns true when ctrlKey is set", () => {
         const e = makeEvent("s", { ctrlKey: true });
         expect(isCtrlHeld(e)).toBe(true);
@@ -59,7 +61,40 @@ describe("isCtrlHeld", () => {
     });
 });
 
+describe("isCtrlHeld - platform-specific", () => {
+    beforeEach(() => __setMacPlatformForTesting(null));
+
+    describe("on Mac", () => {
+        beforeEach(() => __setMacPlatformForTesting(true));
+
+        it("returns true for metaKey (Cmd)", () => {
+            expect(isCtrlHeld(makeEvent("s", { metaKey: true }))).toBe(true);
+        });
+
+        it("returns true for both ctrlKey and metaKey", () => {
+            expect(isCtrlHeld(makeEvent("s", { ctrlKey: true, metaKey: true }))).toBe(true);
+        });
+    });
+
+    describe("on Windows/Linux", () => {
+        beforeEach(() => __setMacPlatformForTesting(false));
+
+        it("returns true for ctrlKey only", () => {
+            expect(isCtrlHeld(makeEvent("s", { ctrlKey: true }))).toBe(true);
+        });
+
+        it("returns false for metaKey (Win key) alone", () => {
+            expect(isCtrlHeld(makeEvent("s", { metaKey: true }))).toBe(false);
+        });
+
+        it("returns false when both ctrlKey and metaKey held", () => {
+            expect(isCtrlHeld(makeEvent("s", { ctrlKey: true, metaKey: true }))).toBe(false);
+        });
+    });
+});
+
 describe("matchesHotkey", () => {
+    beforeEach(() => __setMacPlatformForTesting(null));
     it("matches simple key with no modifiers", () => {
         expect(matchesHotkey(makeEvent("a"), "a")).toBe(true);
     });
@@ -86,6 +121,38 @@ describe("matchesHotkey", () => {
 
     it("rejects when extra modifier held", () => {
         expect(matchesHotkey(makeEvent("s", { ctrlKey: true, altKey: true }), "Ctrl+s")).toBe(false);
+    });
+});
+
+describe("matchesHotkey - metaKey guard", () => {
+    beforeEach(() => __setMacPlatformForTesting(null));
+
+    describe("on Mac", () => {
+        beforeEach(() => __setMacPlatformForTesting(true));
+
+        it("matches Cmd+S as Ctrl+S", () => {
+            expect(matchesHotkey(makeEvent("s", { metaKey: true }), "Ctrl+s")).toBe(true);
+        });
+
+        it("matches Meta+key when combo includes Meta", () => {
+            expect(matchesHotkey(makeEvent("s", { metaKey: true }), "Meta+s")).toBe(true);
+        });
+    });
+
+    describe("on Windows/Linux", () => {
+        beforeEach(() => __setMacPlatformForTesting(false));
+
+        it("rejects Win+S when combo is Ctrl+S", () => {
+            expect(matchesHotkey(makeEvent("s", { metaKey: true }), "Ctrl+s")).toBe(false);
+        });
+
+        it("rejects Win+Ctrl+S when combo is Ctrl+S", () => {
+            expect(matchesHotkey(makeEvent("s", { ctrlKey: true, metaKey: true }), "Ctrl+s")).toBe(false);
+        });
+
+        it("matches Meta+key when combo explicitly includes Meta", () => {
+            expect(matchesHotkey(makeEvent("s", { metaKey: true }), "Meta+s")).toBe(true);
+        });
     });
 });
 
