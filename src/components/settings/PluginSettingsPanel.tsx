@@ -87,7 +87,7 @@ export const PluginSettingsPanel: Component<{ pluginId: string }> = (props) => {
             const plugins = await invoke<PluginInfoFE[]>("list_plugins");
             const found = plugins.find((p) => p.manifest.id === props.pluginId);
             if (found) setPluginInfo(found);
-        } catch {}
+        } catch (e) { console.warn('[PluginSettings] list_plugins failed:', e); }
 
         // Initial render of settings tab
         await renderSettingsTab();
@@ -115,7 +115,7 @@ export const PluginSettingsPanel: Component<{ pluginId: string }> = (props) => {
         if (settingTab && typeof settingTab.hide === "function") {
             try {
                 settingTab.hide();
-            } catch {}
+            } catch (e) { console.warn('[PluginSettings] settingTab.hide failed:', e); }
         }
     });
 

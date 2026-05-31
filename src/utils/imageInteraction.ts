@@ -523,7 +523,7 @@ export function showImageContextMenu(
             }
             // Delete the image file from the vault
             invoke("delete_file", { relativePath: imgPath }).catch((err) => {
-                console.warn("[ImageContextMenu] Failed to delete image:", err);
+                console.error("[ImageContextMenu] Failed to delete image:", err);
             });
         },
         { danger: true },

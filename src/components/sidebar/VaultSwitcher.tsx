@@ -27,7 +27,7 @@ export const VaultSwitcher: Component<{
         try {
             const saved = localStorage.getItem("mindzj-vault-list");
             if (saved) setVaults(JSON.parse(saved));
-        } catch {}
+        } catch (e) { console.warn('[VaultSwitcher] Failed to parse stored vault list:', e); }
 
         const handleClick = (e: MouseEvent) => {
             const target = e.target as HTMLElement;

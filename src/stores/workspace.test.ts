@@ -72,8 +72,8 @@ describe("workspace", () => {
             expect(result.split_ratio).toBe(0.5);
         });
 
-        it("warns to console on error", async () => {
-            const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        it("logs error to console on error", async () => {
+            const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
             const error = new Error("load fail");
 
             const { invoke } = await import("@tauri-apps/api/core");
@@ -82,8 +82,8 @@ describe("workspace", () => {
             const { loadWorkspace } = await import("./workspace");
             await loadWorkspace();
 
-            expect(warnSpy).toHaveBeenCalledWith("Failed to load workspace:", error);
-            warnSpy.mockRestore();
+            expect(errorSpy).toHaveBeenCalledWith("Failed to load workspace:", error);
+            errorSpy.mockRestore();
         });
     });
 

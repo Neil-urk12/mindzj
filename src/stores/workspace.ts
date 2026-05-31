@@ -36,7 +36,7 @@ export async function loadWorkspace(): Promise<WorkspaceState> {
         workspace = await invoke<WorkspaceState>("load_workspace");
         return workspace;
     } catch (e) {
-        console.warn("Failed to load workspace:", e);
+        console.error("Failed to load workspace:", e);
         return DEFAULT_WORKSPACE;
     }
 }

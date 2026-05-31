@@ -162,7 +162,7 @@ function setActivePluginView(handle: string, notify: boolean): any | null {
     if (typeof view.markActive === "function") {
         try {
             view.markActive();
-        } catch {}
+        } catch (e) { console.warn('[Plugin View] markActive failed:', e); }
     }
 
     if (notify) {
@@ -425,7 +425,7 @@ export function destroyPluginView(handle: string) {
             if (view.containerEl?.parentElement) {
                 view.containerEl.remove();
             }
-        } catch {}
+        } catch (e) { console.warn('[Plugin View] containerEl.remove failed:', e); }
         try {
             const activateMountedView = view.__mindzjActivatePluginView;
             const mountEl = view.__mindzjActivatePluginViewMountEl;
@@ -441,7 +441,7 @@ export function destroyPluginView(handle: string) {
                     true,
                 );
             }
-        } catch {}
+        } catch (e) { console.warn('[Plugin View] removeEventListener failed:', e); }
         activePluginViews.delete(handle);
         if (activePluginViewHandle === handle) {
             activePluginViewHandle = null;
@@ -744,7 +744,7 @@ function createPluginStore() {
         for (const [handle, view] of activePluginViews.entries()) {
             try {
                 if (view.onClose) view.onClose();
-            } catch {}
+            } catch (e) { console.warn('[Plugin View] onClose failed:', e); }
             activePluginViews.delete(handle);
         }
         uninstallPluginHotkeys();
@@ -755,7 +755,7 @@ function createPluginStore() {
         if (!plugin) return;
         try {
             if (plugin.instance?.onunload) await plugin.instance.onunload();
-        } catch {}
+        } catch (e) { console.warn('[Plugin] onunload failed:', e); }
         if (plugin.styleEl) plugin.styleEl.remove();
         deletePluginDataDir(pluginId);
         pluginSettingTabs.delete(pluginId);

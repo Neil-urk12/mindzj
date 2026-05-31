@@ -1235,7 +1235,7 @@ export function createAppObject(pluginId: string, obsidianModule: any, executeCo
                 for (const fn of this._eventHandlers[event] || []) {
                     try {
                         fn(...args);
-                    } catch {}
+                    } catch (e) { console.warn('[PluginShim] event callback failed:', e); }
                 }
             },
         },
@@ -1295,7 +1295,7 @@ export function createAppObject(pluginId: string, obsidianModule: any, executeCo
                             } else {
                                 cb();
                             }
-                        } catch {}
+                        } catch (e) { console.warn('[PluginShim] event callback failed:', e); }
                     }
                 }) as EventListener;
                 document.addEventListener("mindzj:workspace-trigger", handler);
@@ -1321,7 +1321,7 @@ export function createAppObject(pluginId: string, obsidianModule: any, executeCo
                 for (const fn of handlers) {
                     try {
                         fn(...args);
-                    } catch {}
+                    } catch (e) { console.warn('[PluginShim] event callback failed:', e); }
                 }
             },
             getActiveViewOfType(type: any) {
@@ -1345,7 +1345,7 @@ export function createAppObject(pluginId: string, obsidianModule: any, executeCo
                             if (expectedType === activeView.getViewType()) {
                                 return activeView;
                             }
-                        } catch {}
+                        } catch (e) { console.warn('[PluginShim] event callback failed:', e); }
                     }
                 }
 
@@ -1372,7 +1372,7 @@ export function createAppObject(pluginId: string, obsidianModule: any, executeCo
                                 ? activePluginView
                                 : null;
                         }
-                    } catch {}
+                    } catch (e) { console.warn('[PluginShim] event callback failed:', e); }
                 }
                 const handle = getActivePluginViewHandle();
                 const activePluginView = handle
@@ -1848,7 +1848,7 @@ export function createObsidianShim(pluginId: string) {
                     if (entry.el) {
                         entry.el.removeEventListener?.(entry.type, entry.callback, entry.options);
                     }
-                } catch {}
+                } catch { /* element may already be removed */ }
             }
             this._domListeners = [];
             // Clean up workspace.on() listeners — only this plugin's handlers
@@ -1857,7 +1857,7 @@ export function createObsidianShim(pluginId: string) {
                 for (const handler of this._wsHandlers) {
                     try {
                         document.removeEventListener("mindzj:workspace-trigger", handler);
-                    } catch {}
+                    } catch { /* element may already be removed */ }
                 }
                 for (let i = wsListeners.length - 1; i >= 0; i--) {
                     if (this._wsHandlers.includes(wsListeners[i].handler)) {
@@ -3400,7 +3400,7 @@ export function createObsidianShim(pluginId: string) {
                 for (const fn of this._events[name] || [])
                     try {
                         fn(...args);
-                    } catch {}
+                    } catch (e) { console.warn('[PluginShim] event callback failed:', e); }
             }
             offref(_ref: any) {}
         },
@@ -3422,7 +3422,7 @@ export function createObsidianShim(pluginId: string) {
                 let json: any;
                 try {
                     json = JSON.parse(text);
-                } catch {}
+                } catch (e) { console.warn('[PluginShim] event callback failed:', e); }
                 return {
                     status: resp.status,
                     headers: Object.fromEntries(resp.headers.entries()),

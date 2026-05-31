@@ -20,6 +20,10 @@ export async function waitForPdfExportAssets(root: HTMLElement): Promise<void> {
                       }),
         ),
     );
-    await document.fonts?.ready.catch(() => undefined);
+    try {
+        await document.fonts?.ready;
+    } catch (e) {
+        console.warn('[PdfExport] fonts.ready failed:', e);
+    }
     await waitForNextFrame();
 }

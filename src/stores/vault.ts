@@ -100,7 +100,7 @@ function createVaultStore() {
         setActiveFile(content);
       }
     } catch (e: any) {
-      console.warn("reloadFile failed:", e);
+      console.error("reloadFile failed:", e);
     }
   }
 

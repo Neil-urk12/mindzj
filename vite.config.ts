@@ -28,7 +28,6 @@ export default defineConfig(async () => ({
         "**/vault1/**",
         "**/.mindzj/**",
         "**/dist/**",
-        "**/dist-electron/**",
         "**/.git/**",
       ],
     },

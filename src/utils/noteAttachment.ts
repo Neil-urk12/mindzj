@@ -177,6 +177,6 @@ export function deleteImage(params: {
 
     // Delete the image file from the vault
     invoke("delete_file", { relativePath: imagePath }).catch((err) => {
-        console.warn("[Editor] Failed to delete image file:", err);
+        console.error("[Editor] Failed to delete image file:", err);
     });
 }
